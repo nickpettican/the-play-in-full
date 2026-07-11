@@ -140,15 +140,15 @@ const stickMove = { x: 0, y: 0 };
 if (IS_TOUCH) {
   mobileUI.style.display = 'block';
   document.getElementById('ctrlHint').style.display = 'none';
-  // go fullscreen landscape on the first gesture (best effort; not all browsers allow it)
-  let fsTried = false;
-  addEventListener('touchend', async () => {
-    if (fsTried) return;
-    fsTried = true;
-    try {
-      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      await screen.orientation.lock('landscape');
-    } catch (e) { /* unsupported (e.g. iOS Safari) — the rotate overlay covers it */ }
+  // go fullscreen landscape; retry on each gesture until one sticks — Chrome Android
+  // sometimes rejects the very first request (best effort; iOS Safari never allows it,
+  // the rotate overlay covers that). ponytail: promise chain, not async, so a failed
+  // orientation.lock can't swallow a successful fullscreen.
+  addEventListener('touchend', () => {
+    if (document.fullscreenElement) return;
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+      .then(() => screen.orientation?.lock('landscape'))
+      .catch(() => {});
   }, { passive: true });
   const stick = document.getElementById('stick');
   const knob = document.getElementById('knob');
