@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pose tester</title>
+<style>
+  body { margin: 0; font: 13px/1.4 monospace; background: #223; color: #eee; }
+  #ui { position: fixed; top: 0; right: 0; width: 270px; max-height: 100vh; overflow-y: auto;
+        background: rgba(10,12,20,0.88); padding: 10px 12px; box-sizing: border-box; }
+  #ui label { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  #ui label span { width: 58px; }
+  #ui input[type=range] { flex: 1; }
+  #ui .v { width: 44px; text-align: right; }
+  #ui h4 { margin: 8px 0 2px; color: #ffd27a; }
+  #modes button { margin: 2px 2px 8px 0; }
+  #out { white-space: pre-wrap; background: #111; padding: 6px; margin-top: 8px;
+         font-size: 11px; user-select: all; }
+  #hint { color: #99a; font-size: 11px; margin-top: 6px; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="ui">
+  <div id="modes"></div>
+  <label><span>mirror L→R</span><input type="checkbox" id="mirror"></label>
+  <div id="sliders"></div>
+  <div id="out"></div>
+  <div id="hint">Drag to orbit, wheel to zoom. Copy the box above into characters.js / player.js when it looks right.</div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { makePerson, makeBuddha, makeBowl } from './src/characters.js';
+
+const q = new URLSearchParams(location.search);
+const mode = q.get('mode') || 'meditation';
+
+// per-mode defaults = the values currently in the game
+const MODES = {
+  meditation: { sit: true, who: 'nun', mirror: true, vals: {
+    aLx: -0.13, aLy: -1.09, aLz: -0.2, eLx: -0.79, eLy: 0.59, eLz: 1.65,
+    aRx: -0.13, aRy: 1.09, aRz: 0.2, eRx: -0.79, eRy: -0.59, eRz: -1.65 } },
+  buddha: { sit: true, who: 'buddha', mirror: false, vals: {
+    aLx: -0.03, aLy: 0.66, aLz: -0.07, eLx: -0.44, eLy: -0.04, eLz: -0.36,
+    aRx: -0.02, aRy: 0.32, aRz: 0.16, eRx: -0.73, eRy: 0.25, eRz: -1.32 } },
+  walkjoined: { sit: false, who: 'buddha', mirror: true, vals: {
+    aLx: -0.12, aLy: -0.2, aLz: -0.11, eLx: -0.72, eLy: 0.19, eLz: 1.17,
+    aRx: -0.12, aRy: 0.2, aRz: 0.11, eRx: -0.72, eRy: -0.19, eRz: -1.17 } },
+  skirt: { sit: false, who: 'laywoman', mirror: true, vals: {
+    aLx: 0, aLy: 0, aLz: -0.08, eLx: -0.12, eLy: 0, eLz: 0,
+    aRx: 0, aRy: 0, aRz: 0.08, eRx: -0.12, eRy: 0, eRz: 0 } },
+  bowl: { sit: false, who: 'monk', mirror: true, bowl: true, vals: {
+    aLx: -0.12, aLy: 0.3, aLz: -0.13, eLx: -1.35, eLy: 0, eLz: 0.55,
+    aRx: -0.12, aRy: -0.3, aRz: 0.13, eRx: -1.35, eRy: 0, eRz: -0.55,
+    by: 0.28, bz: 0.32 } },
+};
+const M = MODES[mode];
+const vals = { ...M.vals };
+for (const k in vals) if (q.has(k)) vals[k] = parseFloat(q.get(k));
+
+// scene
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8fb4c8);
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x557755, 1.1));
+const sun = new THREE.DirectionalLight(0xffe8c0, 1.6);
+sun.position.set(4, 8, 6);
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(8, 24),
+  new THREE.MeshLambertMaterial({ color: 0x6a915a }));
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 1.1, 3.2);
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.target.set(0, M.sit ? 0.6 : 1.0, 0);
+orbit.update();
+
+const P = M.who === 'buddha' ? makeBuddha() : makePerson({ kind: M.who });
+P.lockArms = true;
+if (M.sit) P.setAnim('sit');
+scene.add(P.group);
+let bowl = null;
+if (M.bowl) {
+  bowl = makeBowl();
+  bowl.scale.setScalar(2);
+  P.body.add(bowl);
+}
+
+// UI
+const modesDiv = document.getElementById('modes');
+for (const m of Object.keys(MODES)) {
+  const b = document.createElement('button');
+  b.textContent = m;
+  b.disabled = m === mode;
+  b.onclick = () => location.search = '?mode=' + m;
+  modesDiv.appendChild(b);
+}
+const mirror = document.getElementById('mirror');
+mirror.checked = M.mirror;
+
+const GROUPS = [
+  ['armL (R arm, -x)', ['aLx', 'aLy', 'aLz']],
+  ['elbL', ['eLx', 'eLy', 'eLz']],
+  ['armR (L arm, +x)', ['aRx', 'aRy', 'aRz']],
+  ['elbR', ['eRx', 'eRy', 'eRz']],
+];
+if (M.bowl) GROUPS.push(['bowl', ['by', 'bz']]);
+const sl = document.getElementById('sliders');
+const inputs = {};
+for (const [title, keys] of GROUPS) {
+  const h = document.createElement('h4'); h.textContent = title; sl.appendChild(h);
+  for (const k of keys) {
+    const lab = document.createElement('label');
+    const name = document.createElement('span'); name.textContent = k;
+    const r = document.createElement('input');
+    r.type = 'range'; r.min = -3.2; r.max = 3.2; r.step = 0.01; r.value = vals[k];
+    const v = document.createElement('span'); v.className = 'v'; v.textContent = vals[k];
+    r.oninput = () => { vals[k] = parseFloat(r.value); v.textContent = r.value; apply(); };
+    lab.append(name, r, v);
+    sl.appendChild(lab);
+    inputs[k] = { r, v };
+  }
+}
+
+const out = document.getElementById('out');
+function apply() {
+  if (mirror.checked) {
+    vals.aRx = vals.aLx; vals.aRy = -vals.aLy; vals.aRz = -vals.aLz;
+    vals.eRx = vals.eLx; vals.eRy = -vals.eLy; vals.eRz = -vals.eLz;
+    for (const k of ['aRx', 'aRy', 'aRz', 'eRx', 'eRy', 'eRz']) {
+      inputs[k].r.value = vals[k]; inputs[k].v.textContent = vals[k].toFixed(2);
+    }
+  }
+  P.armL.rotation.set(vals.aLx, vals.aLy, vals.aLz);
+  P.elbL.rotation.set(vals.eLx, vals.eLy, vals.eLz);
+  P.armR.rotation.set(vals.aRx, vals.aRy, vals.aRz);
+  P.elbR.rotation.set(vals.eRx, vals.eRy, vals.eRz);
+  if (bowl) bowl.position.set(0, vals.by, vals.bz);
+  const f = n => (Math.round(n * 100) / 100).toString();
+  out.textContent =
+    `armL.rotation.set(${f(vals.aLx)}, ${f(vals.aLy)}, ${f(vals.aLz)}); ` +
+    `elbL.rotation.set(${f(vals.eLx)}, ${f(vals.eLy)}, ${f(vals.eLz)});\n` +
+    `armR.rotation.set(${f(vals.aRx)}, ${f(vals.aRy)}, ${f(vals.aRz)}); ` +
+    `elbR.rotation.set(${f(vals.eRx)}, ${f(vals.eRy)}, ${f(vals.eRz)});` +
+    (bowl ? `\nbowl.position.set(0, ${f(vals.by)}, ${f(vals.bz)});` : '');
+}
+mirror.onchange = apply;
+apply();
+
+// hooks for scripted screenshots
+window.__set = (k, x) => { vals[k] = x; if (inputs[k]) { inputs[k].r.value = x; inputs[k].v.textContent = x; } apply(); };
+window.__vals = () => ({ ...vals });
+window.__cam = (yaw, pitch, dist) => {
+  const t = orbit.target;
+  camera.position.set(
+    t.x + Math.sin(yaw) * Math.cos(pitch) * dist,
+    t.y + Math.sin(pitch) * dist,
+    t.z + Math.cos(yaw) * Math.cos(pitch) * dist);
+  orbit.update();
+};
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+renderer.setAnimationLoop(() => renderer.render(scene, camera));
+</script>
+</body>
+</html>
