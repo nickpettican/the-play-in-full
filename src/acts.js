@@ -652,7 +652,7 @@ ACTS[6] = async () => {
     const p = makePerson({ kind: 'monk', robe: 0xcc7722, skin: 0xc8996c });
     p.lockArms = true;
     p.armL.rotation.set(-0.12, 0.3, -0.13); elbL.rotation.set(-1.35, 0, 0.55);
-    p.rotation.set(-0.12, -0.3, 0.13); elbR.rotation.set(-1.35, 0, -0.55);
+    p.armR.rotation.set(-0.12, -0.3, 0.13); elbR.rotation.set(-1.35, 0, -0.55);
     const bowl = makeBowl();
     bowl.scale.setScalar(2);
     bowl.position.set(0, 0.28, 0.32);
@@ -867,11 +867,11 @@ ACTS[9] = async () => {
   suj.group.rotation.y = -Math.PI / 2;
   suj.bowHold = true; // held still in the bow of offering
   suj.lockArms = true;
-  suj.armL.rotation.set(-0.6, 0, 0.35); suj.elbL.rotation.x = -0.5;
-  suj.armR.rotation.set(-0.6, 0, -0.35); suj.elbR.rotation.x = -0.5;
+  suj.armL.rotation.set(-0.12, 0.3, -0.13); suj.elbL.rotation.set(-1.35, 0, 0.55);
+  suj.armR.rotation.set(-0.12, -0.3, 0.13); suj.elbR.rotation.set(-1.35, 0, -0.55);
   const kheer = makeBowl();
   kheer.scale.setScalar(1.6);
-  kheer.position.set(0, 0.18, 0.42);
+  kheer.position.set(0, 0.28, 0.32);
   suj.body.add(kheer);
   addProp(suj.group);
   onUpdate((dt, t) => suj.update(dt, t));
