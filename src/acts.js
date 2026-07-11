@@ -651,11 +651,11 @@ ACTS[6] = async () => {
   { // the mendicant, alms bowl held out
     const p = makePerson({ kind: 'monk', robe: 0xcc7722, skin: 0xc8996c });
     p.lockArms = true;
-    p.armL.rotation.set(-0.5, 0, 0.4); p.elbL.rotation.x = -0.72;
-    p.armR.rotation.set(-0.5, 0, -0.4); p.elbR.rotation.x = -0.72;
+    p.armL.rotation.set(-0.12, 0.3, -0.13); elbL.rotation.set(-1.35, 0, 0.55);
+    p.rotation.set(-0.12, -0.3, 0.13); elbR.rotation.set(-1.35, 0, -0.55);
     const bowl = makeBowl();
     bowl.scale.setScalar(2);
-    bowl.position.set(0, 0.16, 0.48);
+    bowl.position.set(0, 0.28, 0.32);
     p.body.add(bowl);
     sights.push({ person: p, off: new THREE.Vector3(-2.8, 0, 0) });
   }
