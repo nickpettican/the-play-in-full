@@ -1467,9 +1467,8 @@ ACTS[10] = async () => {
   buddha.group.position.copy(from);
   addProp(buddha.group);
   onUpdate((dt, t) => buddha.update(dt, t));
-  // player.camLook = from.clone().setY(from.y + 1.2); // a pan to him as he sets out, then the camera is the player's again
-  player.yaw = player.camYaw = from.y + 1.2;
-  // setTimeout(() => { player.camLook = null; }, 3000);
+  player.camLook = from.clone().setY(from.y + 1.2); // a pan to him as he sets out, then the camera is the player's again
+  setTimeout(() => { player.camLook = null; }, 3000);
   showNarration([NARRATION.act10[0]].map(x => ({ ...x, who: 'The Blessed One' })));
   const to = W.spots.dais.clone();
   to.y = W.groundHeight(to.x, to.z);
