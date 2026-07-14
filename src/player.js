@@ -36,8 +36,9 @@ export function createPlayerAvatar(kind /* 'monk' | 'nun' */) {
   const nun = kind === 'nun';
   player.kind = kind;
   player.person = makePerson({
-    kind, robe: nun ? 0xb35c2e : 0xcc7722,
+    kind, robe: nun ? 0xb35c2e : 0x9a4318,
     skin: nun ? 0xd8a877 : 0xc8996c,
+    outerRobe: true
   });
   // the player's halo glows with mindfulness: full focus = full halo, none = none
   player.mindHalo = makeHalo('gold', 0.75);

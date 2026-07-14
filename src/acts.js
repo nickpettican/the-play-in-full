@@ -1,14 +1,14 @@
 // The twelve deeds: act state machine, scripted characters, cutscenes.
 import * as THREE from 'three';
 import { scene, loadModel, instantiate, setDaylight, snapDaylight } from './engine.js';
-import { switchWorld, world, lotus } from './world.js';
+import { switchWorld, world, lotus, scatterGods } from './world.js';
 import { player, setWitnessForm } from './player.js';
 import { spawnNPC, clearNPCs, npcs, nearestNPC, talkTo, resetQuestions, allQuestionsExhausted } from './npc.js';
 import { makePerson, makeBuddha, makeBowl, makeHalo, makeTalkMarker, makeHorse, makeElephant, makeCarriage, makeDeer } from './characters.js';
 import { showNarration, showChoices, showActCard, fade, dialogue } from './dialogue.js';
 import { NARRATION, actTitle, QA_PALI, QA_MAHAYANA, QA_DEVA, QA_ASCETIC, QA_IMPERMANENCE, BODHISATTVAS, DISCIPLES, script } from './content.js';
 import { T } from './i18n.js';
-import { setAmbient, sfxBell, sfxSwell, sfxTwinkle, sfxFile, sfxDrum, sfxWhoosh, sfxSparkle, sfxHorse, sfxChime } from './audio.js';
+import { setAmbient, sfxBell, sfxTwinkle, sfxFile, sfxDrum, sfxWhoosh, sfxSparkle, sfxHorse, sfxChime } from './audio.js';
 import { petals, motes, burst, radiance, fireflies, aura, clearParticles } from './particles.js';
 
 export const game = { act: -1, updaters: [], props: [], interactables: [] };
@@ -25,12 +25,12 @@ function clearStage() {
 function onUpdate(fn) { game.updaters.push(fn); }
 
 // interactable: floating marker at pos; action() when player clicks nearby
-function addInteractable({ pos, r = 3, marker = true, markerY = 2.4, action, host = null }) {
+function addInteractable({ pos, r = 3, marker = true, markerY = 2.4, markerX, action, host = null }) {
   const it = { pos, r, action, alive: true };
   if (marker) {
     it.sprite = makeTalkMarker();
     const holder = host || scene;
-    it.sprite.position.copy(host ? new THREE.Vector3(0, markerY, 0) : pos.clone().add(new THREE.Vector3(0, markerY, 0)));
+    it.sprite.position.copy(host ? new THREE.Vector3(markerX ?? 0, markerY, 0) : pos.clone().add(new THREE.Vector3(0, markerY, 0)));
     holder.add(it.sprite);
     if (!host) game.props.push(it.sprite);
   }
@@ -97,8 +97,9 @@ function spawnSangha(W, centre, { monks = 26, withQA = true, qaBank = null, bowN
     const arhat = Math.random() < 0.12;
     spawnNPC({
       kind: Math.random() < 0.3 ? 'nun' : 'monk',
-      robe: [0xcc7722, 0xb35c2e, 0xa3542a, 0xd98a33][(Math.random() * 4) | 0],
+      robe: [0x9a4318, 0xcc7722, 0xb35c2e, 0xa3542a, 0xd98a33][(Math.random() * 4) | 0],
       skin: [0xc8996c, 0xa87a50, 0xd8a877, 0x8a6a48][(Math.random() * 4) | 0],
+      outerRobe: true,
       halo: arhat ? 'white' : null,
       behaviour: Math.random() < 0.55 ? 'sit' : 'wander',
       pos, wanderR: 10, bowNear,
@@ -118,6 +119,7 @@ function spawnDisciples(W, centre) {
     pos.y = W.groundHeight(pos.x, pos.z);
     spawnNPC({
       kind: 'monk', name: D.name, robe: D.robe, skin: 0xc8996c,
+      outerRobe: true,
       halo: D.halo, behaviour: 'sit', pos,
       yaw: Math.atan2(centre.x - pos.x, centre.z - pos.z),
       qa: D.qa.slice(),
@@ -184,6 +186,36 @@ function makeRoyalBed(pos) {
   bed.traverse(o => { if (o.isMesh) o.castShadow = true; });
   return bed;
 }
+// Two royal guards flanking the Kapilavastu palace door, a flat silver sword
+// in the right hand. asleep: fallen at their post (the night of the renunciation).
+function palaceGuards(W, { asleep = false } = {}) {
+  for (const s of [-1, 1]) {
+    const g = makePerson({ kind: 'layman', robe: 0x8a3226, skin: 0xb08a60, hair: 'bun' });
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.85, 0.015),
+      new THREE.MeshLambertMaterial({ color: 0xc9ced4, flatShading: true }));
+    g.elbL.add(blade);
+    const x = s * (asleep ? 3.0 : 4.2), z = asleep ? -34.6 : -36;
+    g.group.position.set(x, W.groundHeight(x, z), z);
+    if (asleep) {
+      blade.position.set(0, -0.72, 0.04); // the sword lies loose by the sleeping hand
+      blade.rotation.y = Math.PI / 2;
+      g.setAnim('lie');
+      g.group.position.y += 0.1;
+      g.group.rotation.y = s < 0 ? 0 : Math.PI; // lying along the wall, heads outward
+    } else {
+      // held upright: forearm raised level, the blade vertical above the fist
+      g.lockArms = true;
+      g.elbL.rotation.set(-1.65, 0, 0);
+      // x counter-rotates the elbow bend (blade vertical); y spins the flat 90°
+      blade.rotation.set(1.65, Math.PI / 2, 0);
+      blade.position.set(0, -0.37, 0.45);
+      g.group.rotation.y = 0; // at attention, facing the approach
+    }
+    addProp(g.group);
+    onUpdate((dt, t) => g.update(dt, t));
+  }
+}
+
 const bedAtHall = (W) => {
   const h = W.spots.hall;
   return makeRoyalBed(new THREE.Vector3(h.x, W.groundHeight(h.x, h.z), h.z));
@@ -318,14 +350,17 @@ ACTS[1] = async () => {
 // -- Act II: Conception --
 ACTS[2] = async () => {
   const W = await transition(2, 'kapilavastu', 'night', 'night');
+  W.removeGate?.();
   player.pos.set(0, 0, -34); // before the palace door
+  palaceGuards(W);
+  scatterGods(W, 100, { cx: 0, cz: -50 }); // the hosts of gods watching from the night sky
   fireflies(new THREE.Vector3(0, 0, -49), 26); // drifting in the open courtyard
   // the royal bed under the open sky of the courtyard, wide enough for
   // the queen and the king side by side
   const hall = W.spots.hall;
   const couchPos = new THREE.Vector3(hall.x, W.groundHeight(hall.x, hall.z), hall.z);
   addProp(makeRoyalBed(couchPos));
-  const maya = makePerson({ kind: 'laywoman', robe: 0xc23a5f, skin: 0xd8a877 });
+  const maya = makePerson({ kind: 'laywoman', robe: 0xc23a5f, skin: 0xd8a877, ornate: true });
   maya.setAnim('lie');
   // on the mattress: 'lie' tips the figure toward local -x with the pivot at the feet
   maya.group.position.copy(couchPos).add(new THREE.Vector3(0.9, 0.86, -0.55));
@@ -508,6 +543,7 @@ ACTS[4] = async () => {
   const W = await transition(4, 'kapilavastu', 'day', 'palace');
   player.pos.set(0, 0, -26); // just inside the king's gate
   addProp(bedAtHall(W));
+  palaceGuards(W);
   const c = new THREE.Vector3(24, 0, -30); // training grounds inside the king's wall, east of the palace
   // targets: drums on posts
   const drums = [];
@@ -638,6 +674,7 @@ ACTS[5] = async () => {
   const W = await transition(5, 'kapilavastu', 'golden', 'wedding');
   player.pos.set(0, 0, -26); // just inside the king's gate
   addProp(bedAtHall(W));
+  palaceGuards(W);
   const c = W.spots.courtyard;
   // wedding dais
   const dais = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.9, 0.5, 12),
@@ -646,6 +683,8 @@ ACTS[5] = async () => {
   dais.receiveShadow = true;
   addProp(dais);
   W.camBlockers.push(dais);
+  // walkable: an inscribed solid block so the player can step up onto it
+  W.addBlock(c.x - 1.9, c.x + 1.9, c.z - 1.9, c.z + 1.9, dais.position.y - 0.25, dais.position.y + 0.25);
   const sid = makePerson({ kind: 'prince', robe: 0xe8b84a, skin: 0xd8a877, halo: 'gold', ornate: true });
   sid.group.position.set(c.x - 0.7, dais.position.y + 0.25, c.z);
   sid.setAnim('sit');
@@ -669,7 +708,6 @@ ACTS[5] = async () => {
       yaw: Math.atan2(c.x - p.x, c.z - p.z),
     });
   }
-  sfxBell(392, 0.12, 4);
   addInteractable({
     pos: new THREE.Vector3(c.x, 0, c.z), r: 4, markerY: 2.6,
     action(it) {
@@ -684,6 +722,7 @@ ACTS[6] = async () => {
   const W = await transition(6, 'kapilavastu', 'day', 'forest');
   W.stableCarriageHorse.visible = false; // he is harnessed to the carriage today
   player.pos.set(2, 0, 2);
+  palaceGuards(W);
   // carriage route down the town road (z: 0 -> 60)
   const stops = [8, 22, 38, 54].map(z => new THREE.Vector3(0.5, 0, z));
   const carriage = makeCarriage();
@@ -725,8 +764,8 @@ ACTS[6] = async () => {
     p.setAnim('lie');
     sights.push({ person: p, off: new THREE.Vector3(3, 0, 0.5), bier: true });
   }
-  { // the mendicant, alms bowl held out
-    const p = makePerson({ kind: 'monk', robe: 0xcc7722, skin: 0xc8996c });
+  { // the mendicant, alms bowl held out 0xcc7722
+    const p = makePerson({ kind: 'monk', robe: 0x9a4318, skin: 0xc8996c });
     p.lockArms = true;
     p.armL.rotation.set(-0.12, 0.3, -0.13); p.elbL.rotation.set(-1.35, 0, 0.55);
     p.armR.rotation.set(-0.12, -0.3, 0.13); p.elbR.rotation.set(-1.35, 0, -0.55);
@@ -777,8 +816,13 @@ ACTS[6] = async () => {
       if (stage >= 4) { done = true; return; }
       moving = false;
       const idx = stage;
+      const sight = sights[stage];
       interactable = addInteractable({
-        pos: () => carriage.group.position, r: 4, marker: true, markerY: 2.6, host: carriage.group,
+        // the bubble sits over the sight itself, not over Siddhārtha
+        pos: sight.person.group.position, r: 5, marker: true,
+        markerY: sight.person.anim === 'lie' ? 1.4 : 2.4, 
+        markerX: sight.person.anim === 'lie' ? 2 : 0, 
+        host: sight.person.group,
         action(it) {
           it.remove();
           showNarration([{ q: script('sightAsk'), who: 'You' },
@@ -810,7 +854,9 @@ ACTS[7] = async () => {
   W.removeGate?.(); // the king's gate stands open this night — the doors are gone
   W.stableCarriageHorse.visible = false; // the pale horse is saddled tonight, not stabled
   player.pos.set(0, 0, -34); // before the palace door
+  palaceGuards(W, { asleep: true }); // even the guards sleep this night
   fireflies(new THREE.Vector3(0, 0, 10), 30);
+  scatterGods(W, 100, { cx: 0, cz: -50 }); // the hosts of gods watching from the night sky
 
   // the women's quarters: Gopā asleep on the royal bed, her attendants strewn about
   const hall = W.spots.hall;
@@ -1064,6 +1110,7 @@ ACTS[9] = async () => {
   onUpdate((dt, t) => sid.update(dt, t));
   // Sujata, a village girl half the size, bowing, the bowl of kheer held out
   const suj = makePerson({ kind: 'laywoman', robe: 0xd88a4a, skin: 0xd8a877, scale: 0.75 });
+  suj.headG.scale.setScalar(1.25);
   suj.group.position.set(bankPos.x + 1.4, W.groundHeight(bankPos.x + 1.4, bankPos.z), bankPos.z);
   suj.group.rotation.y = -Math.PI / 2;
   suj.bowHold = true; // held still in the bow of offering
@@ -1294,36 +1341,60 @@ ACTS[9] = async () => {
     addProp(B.group);
     onUpdate((dt, t) => B.update(dt, t));
     seatedStatue = B.group;
-    // Sujātā returns and sits close by the Awakened One
+    // Sujātā sets out from her village the moment he awakens, and sits close by
     const suj2 = makePerson({ kind: 'laywoman', robe: 0xd88a4a, skin: 0xd8a877, scale: 0.75 });
-    suj2.group.position.set(p.x + 1.9, W.groundHeight(p.x + 1.9, p.z + 1.4), p.z + 1.4);
-    suj2.group.rotation.y = Math.atan2(p.x - (p.x + 1.9), p.z - (p.z + 1.4));
-    suj2.setAnim('sit');
+    const sujFrom = new THREE.Vector3(60, 0, -10);
+    sujFrom.y = W.groundHeight(sujFrom.x, sujFrom.z);
+    const sujSeat = new THREE.Vector3(p.x + 1.9, 0, p.z + 1.4);
+    sujSeat.y = W.groundHeight(sujSeat.x, sujSeat.z);
     addProp(suj2.group);
+    walkPerson(suj2, sujFrom, sujSeat, 1.4, W, () => {
+      suj2.group.rotation.y = Math.atan2(p.x - sujSeat.x, p.z - sujSeat.z);
+      suj2.setAnim('sit');
+    });
     onUpdate((dt, t) => suj2.update(dt, t));
-    // Brahmā and Śakra descend to request the turning of the wheel (ch. 25). They
-    // sit in front of the Buddha, held in añjali, for the whole exhortation.
+    // the hosts of gods fill the sky above the seat of awakening
+    // Brahmā and Śakra descend to request the turning of the wheel (ch. 25).
+    // They flank the Buddha on either side; four more gods sink slowly from the
+    // sky, standing, and on touching ground sit and bow in añjali.
     const ry = B.group.rotation.y;
     const fwd = { x: Math.sin(ry), z: Math.cos(ry) };   // the way he faces
     const rgt = { x: Math.cos(ry), z: -Math.sin(ry) };
     for (const g of [
-      { name: 'Brahmā', robe: 0xfff2d8, skin: 0xf0dcb0, side: -1 },
-      { name: 'Śakra', robe: 0x6ea8c8, skin: 0xe0c890, side: 1 },
+      { name: 'Brahmā', robe: 0xfff2d8, skin: 0xf0dcb0, f: 0.4, r: -2.6 },
+      { name: 'Śakra', robe: 0x6ea8c8, skin: 0xe0c890, f: 0.4, r: 2.6 },
+      { kind: 'deva', robe: 0xd8c8a4, skin: 0xd8b088, f: 3.6, r: -2.3 },
+      { kind: 'devi', robe: 0xc9b28a, skin: 0xc8a070, f: 3.9, r: -0.8 },
+      { kind: 'deva', robe: 0xbfa886, skin: 0xb89468, f: 3.9, r: 0.8 },
+      { kind: 'devi', robe: 0xd2bc96, skin: 0xd0a878, f: 3.6, r: 2.3 },
     ]) {
-      const G = makePerson({ kind: 'deva', robe: g.robe, skin: g.skin, ornate: true, scale: 1.5 });
+      const G = makePerson({ kind: g.kind ?? 'deva', robe: g.robe, skin: g.skin, ornate: true, scale: 1.5 });
       G.setAnim('sit'); // before the traverse: sitting lazily creates the seat-base mesh
+      G.setAnim('idle'); // then stand for the descent
       G.group.traverse(o => {
         o.castShadow = false;
         if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.75; }
       });
-      const gx = p.x + fwd.x * 3.4 + rgt.x * 1.5 * g.side;
-      const gz = p.z + fwd.z * 3.4 + rgt.z * 1.5 * g.side;
-      G.group.position.set(gx, W.groundHeight(gx, gz), gz);
+      const gx = p.x + fwd.x * g.f + rgt.x * g.r;
+      const gz = p.z + fwd.z * g.f + rgt.z * g.r;
+      const gy = W.groundHeight(gx, gz);
+      G.group.position.set(gx, gy + 15 + Math.random() * 8, gz); // high above the seat
       G.group.rotation.y = Math.atan2(p.x - gx, p.z - gz); // facing the Blessed One
-      G.bowHold = true;                                    // palms joined, held in a bow
       addProp(G.group);
-      onUpdate((dt, t) => G.update(dt, t));
+      let landed = false;
+      onUpdate((dt, t) => {
+        G.update(dt, t);
+        if (landed) return;
+        G.group.position.y -= dt * 1.9; // a slow descent while the sutra is read
+        if (G.group.position.y <= gy) {
+          landed = true;
+          G.group.position.y = gy;
+          G.setAnim('sit');
+          G.bowHold = true; // palms joined, held in a bow
+        }
+      });
     }
+    scatterGods(W, 100, { cx: p.x, cz: p.z });
     setTimeout(() => {
       sfxBell(320, 0.15, 5);
       motes(p, 18, 200);
@@ -1396,6 +1467,9 @@ ACTS[10] = async () => {
   buddha.group.position.copy(from);
   addProp(buddha.group);
   onUpdate((dt, t) => buddha.update(dt, t));
+  // player.camLook = from.clone().setY(from.y + 1.2); // a pan to him as he sets out, then the camera is the player's again
+  player.yaw = player.camYaw = from.y + 1.2;
+  // setTimeout(() => { player.camLook = null; }, 3000);
   showNarration([NARRATION.act10[0]].map(x => ({ ...x, who: 'The Blessed One' })));
   const to = W.spots.dais.clone();
   to.y = W.groundHeight(to.x, to.z);
@@ -1431,6 +1505,24 @@ ACTS[10] = async () => {
     setTimeout(() => {
       showNarration(NARRATION.act10.slice(1).map(x => ({ ...x, who: 'The Blessed One' })), () => {
         maybeFocusReward();
+        // hearing the four noble truths, the five go forth: ascetics become monks
+        five.forEach((P, i) => {
+          const g = P.group;
+          const monk = makePerson({
+            kind: 'monk', robe: [0x9a4318, 0xcc7722, 0xb35c2e, 0xa3542a, 0xd98a33][i],
+            skin: 0xa87a50, outerRobe: true,
+          });
+          monk.setAnim('sit');
+          monk.group.position.copy(g.position);
+          monk.group.rotation.y = g.rotation.y;
+          scene.remove(g);
+          addProp(monk.group);
+          onUpdate((dt, t) => monk.update(dt, t));
+          burst(monk.group.position.clone().add(new THREE.Vector3(0, 1, 0)), 16);
+          five[i] = monk;
+        });
+        sfxSparkle();
+        scatterGods(W, 100, { cx: 0, cz: -50 });
         addInteractable({
           pos: () => buddha.group.position, r: 3.8, markerY: 2.2, host: buddha.group,
           action(it) { it.remove(); nextAct(); },
@@ -1493,7 +1585,7 @@ ACTS[12] = async () => {
         player.frozen = true;
         setDaylight('radiance', 8);
         setAmbient('radiance');
-        sfxSwell(10);
+        sfxFile('assets/mp3/indian-flute.mp3');
         motes(c, 20, 200);
         setTimeout(async () => {
           await ending();

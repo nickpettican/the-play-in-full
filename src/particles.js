@@ -97,6 +97,24 @@ export function petals(center, radius = 12, n = 120, colors = [[1, .7, .75], [1,
   });
 }
 
+// Petals let fall from moving sources (the gods' hands overhead).
+export function petalsFrom(sources, n = 600,
+  colors = [[1, .7, .75], [1, .9, .6], [1, 1, 1], [.98, .6, .5]]) {
+  const w = new THREE.Vector3();
+  return makeSystem({
+    // large: they fall from 25-45m up, so they must read at that distance
+    n, size: 0.55, additive: false, vertexColors: true, gravity: 0.25, drag: 0.995,
+    spawn: () => {
+      sources[(Math.random() * sources.length) | 0].getWorldPosition(w);
+      return {
+        p: [w.x, w.y, w.z],
+        v: [(Math.random() - 0.5) * 0.4, -0.3 - Math.random() * 0.3, (Math.random() - 0.5) * 0.4],
+        life: 14 + Math.random() * 8, c: colors[(Math.random() * colors.length) | 0],
+      };
+    },
+  });
+}
+
 // Ambient light motes drifting upward (heaven / radiance).
 export function motes(center, radius = 25, n = 160, color = 0xffe9b0) {
   return makeSystem({

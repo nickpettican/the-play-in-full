@@ -37,7 +37,8 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { makePerson, makeBuddha, makeBowl } from './src/characters.js';
+import { makePerson, makeBuddha, makeBowl, makeOuterRobe,
+         OUTER_ROBE, OUTER_ROBE_NUN, OUTER_ROBE_SIT } from './src/characters.js';
 
 const q = new URLSearchParams(location.search);
 const mode = q.get('mode') || 'meditation';
@@ -64,6 +65,18 @@ const MODES = {
     aLx: -0.15, aLy: 0.35, aLz: -0.15, eLx: -1.9, eLy: 0.25, eLz: 0.7,
     aRx: -0.15, aRy: -0.35, aRz: 0.15, eRx: -1.9, eRy: -0.25, eRz: -0.7,
     bx: 0.3 } },
+  robeMonk: { sit: false, who: 'monk', mirror: true, robe: true, vals: {
+    aLx: 0, aLy: 0, aLz: -0.08, eLx: -0.12, eLy: 0, eLz: 0,
+    aRx: 0, aRy: 0, aRz: 0.08, eRx: -0.12, eRy: 0, eRz: 0,
+    ...OUTER_ROBE } },
+  robeMonkSitting: { sit: true, who: 'monk', mirror: true, robe: true, robeConst: 'OUTER_ROBE_SIT', vals: {
+    aLx: -0.13, aLy: -1.09, aLz: -0.2, eLx: -0.79, eLy: 0.59, eLz: 1.65,
+    aRx: -0.13, aRy: 1.09, aRz: 0.2, eRx: -0.79, eRy: -0.59, eRz: -1.65,
+    ...OUTER_ROBE_SIT } },
+  robeNun: { sit: false, who: 'nun', mirror: true, robe: true, robeConst: 'OUTER_ROBE_NUN', vals: {
+    aLx: 0, aLy: 0, aLz: -0.08, eLx: -0.12, eLy: 0, eLz: 0,
+    aRx: 0, aRy: 0, aRz: 0.08, eRx: -0.12, eRy: 0, eRz: 0,
+    ...OUTER_ROBE_NUN } },
 };
 const M = MODES[mode];
 const vals = { ...M.vals };
@@ -90,9 +103,11 @@ const orbit = new OrbitControls(camera, renderer.domElement);
 orbit.target.set(0, M.sit ? 0.6 : 1.0, 0);
 orbit.update();
 
-const P = M.who === 'buddha' ? makeBuddha() : makePerson({ kind: M.who });
+const P = M.who === 'buddha' ? makeBuddha() : makePerson({ kind: M.who, outerRobe: !!M.robe });
 P.lockArms = true;
 if (M.sit) P.setAnim('sit');
+// robe modes manage a single rebuilt drape; drop the built-in seated variant
+if (M.robe && P.drapeSit) P.body.remove(P.drapeSit);
 scene.add(P.group);
 let bowl = null;
 if (M.bowl) {
@@ -121,6 +136,18 @@ const GROUPS = [
 ];
 if (M.bowl) GROUPS.push(['bowl', ['by', 'bz']]);
 if (M.body) GROUPS.push(['body bow', ['bx']]);
+if (M.robe) GROUPS.push(
+  ['robe profile pt0 (top)', ['p0x', 'p0y']],
+  ['robe profile pt1', ['p1x', 'p1y']],
+  ['robe profile pt2', ['p2x', 'p2y']],
+  ['robe profile pt3', ['p3x', 'p3y']],
+  ['robe profile pt4 (hem)', ['p4x', 'p4y']],
+  ['robe lathe (×π) + spin', ['start', 'len', 'rotY']],
+  ['robe offset', ['x', 'y', 'z']],
+  ['robe hem forward', ['fz']],
+  ['robe scale', ['sx', 'sy', 'sz']],
+  ['robe shading', ['topMul', 'botLerp']],
+);
 const sl = document.getElementById('sliders');
 const inputs = {};
 for (const [title, keys] of GROUPS) {
@@ -154,6 +181,25 @@ function apply() {
   if (bowl) bowl.position.set(0, vals.by, vals.bz);
   if (M.body) P.body.rotation.x = vals.bx;
   const f = n => (Math.round(n * 100) / 100).toString();
+  if (M.robe) {
+    // rebuild the drape from the current params
+    P.body.remove(P.drape);
+    P.drape.geometry.dispose(); P.drape.material.dispose();
+    P.drape = makeOuterRobe(0xcc7722, vals);
+    P.drape.scale.y *= P.tK;
+    P.body.add(P.drape);
+    // paste this over the matching preset in characters.js
+    out.textContent = `export const ${M.robeConst || 'OUTER_ROBE'} = {\n` +
+      `  p0x: ${f(vals.p0x)}, p0y: ${f(vals.p0y)}, p1x: ${f(vals.p1x)}, p1y: ${f(vals.p1y)}, p2x: ${f(vals.p2x)}, p2y: ${f(vals.p2y)},\n` +
+      `  p3x: ${f(vals.p3x)}, p3y: ${f(vals.p3y)}, p4x: ${f(vals.p4x)}, p4y: ${f(vals.p4y)},\n` +
+      `  start: ${f(vals.start)}, len: ${f(vals.len)},\n` +
+      `  rotY: ${f(vals.rotY)},\n` +
+      `  x: ${f(vals.x)}, y: ${f(vals.y)}, z: ${f(vals.z)},\n` +
+      `  sx: ${f(vals.sx)}, sy: ${f(vals.sy)}, sz: ${f(vals.sz)},\n` +
+      `  topMul: ${f(vals.topMul)}, botLerp: ${f(vals.botLerp)},\n` +
+      `  fz: ${f(vals.fz)},\n};`;
+    return;
+  }
   out.textContent =
     `armL.rotation.set(${f(vals.aLx)}, ${f(vals.aLy)}, ${f(vals.aLz)}); ` +
     `elbL.rotation.set(${f(vals.eLx)}, ${f(vals.eLy)}, ${f(vals.eLz)});\n` +

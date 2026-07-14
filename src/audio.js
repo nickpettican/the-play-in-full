@@ -2,6 +2,7 @@
 let ctx = null, master = null, ambBus = null, sfxBus = null;
 let ambientNodes = [];
 let birdTimer = null, bowlTimer = null, currentAmbient = null, pendingAmbient = null;
+let ambientFile = null; // looping mp3 bed (wedding drums), outside the Web Audio graph
 
 export function initAudio() {
   if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
@@ -34,6 +35,30 @@ function stopAmbient(fade = 2) {
   ambientNodes = [];
   if (birdTimer) { clearTimeout(birdTimer); birdTimer = null; }
   if (bowlTimer) { clearTimeout(bowlTimer); bowlTimer = null; }
+  if (ambientFile) {
+    const a = ambientFile; ambientFile = null;
+    // ponytail: linear fade on a plain <audio> element; move it onto the ambient bus if it ever needs ducking
+    const step = a.volume / Math.max(1, fade * 10);
+    const iv = setInterval(() => {
+      a.volume = Math.max(0, a.volume - step);
+      if (a.volume <= 0.001) { clearInterval(iv); a.pause(); }
+    }, 100);
+  }
+}
+
+// a looping mp3 as the ambient bed
+function addAmbientFile(path, vol = 0.45, fade = 3) {
+  const a = new Audio(path);
+  a.loop = true;
+  a.volume = 0;
+  a.play().catch(() => {});
+  ambientFile = a;
+  const step = vol / Math.max(1, fade * 10);
+  const iv = setInterval(() => {
+    if (ambientFile !== a) { clearInterval(iv); return; }
+    a.volume = Math.min(vol, a.volume + step);
+    if (a.volume >= vol - 0.001) clearInterval(iv);
+  }, 100);
 }
 
 // a distant singing bowl, struck softly every so often — the heartbeat of the soundscape
@@ -118,58 +143,6 @@ function addShimmer(fade = 4) { // celestial bell-ish sparkles for heaven
   setTimeout(loop, fade * 300);
 }
 
-// Indian wedding music: tanpura drones, a dholak cycle, and a shehnai-like
-// lead improvising short ornamented phrases on the Bhūpālī scale.
-function addWedding() {
-  addDrone(130.8, 0.018); addDrone(196, 0.012); addDrone(261.6, 0.007); // tanpura: sa–pa–sa
-  const SCALE = [261.6, 293.7, 329.6, 392, 440, 523.3, 587.3, 659.3];   // C D E G A, two octaves
-  const dhol = (t, f, amp) => {
-    const o = ctx.createOscillator(); o.type = 'sine';
-    o.frequency.setValueAtTime(f * 2.2, t);
-    o.frequency.exponentialRampToValueAtTime(f, t + 0.08);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(amp, t);
-    g.gain.exponentialRampToValueAtTime(0.0008, t + 0.3);
-    o.connect(g); g.connect(ambBus); o.start(t); o.stop(t + 0.4);
-  };
-  (function beat() {
-    if (currentAmbient !== 'wedding') return;
-    const t = now() + 0.05; // dha – ge – na – ti: a light dholak cycle
-    dhol(t, 80, 0.085); dhol(t + 0.4, 150, 0.04); dhol(t + 0.8, 80, 0.06);
-    dhol(t + 1.0, 150, 0.04); dhol(t + 1.2, 110, 0.05);
-    setTimeout(beat, 1600);
-  })();
-  (function phrase() {
-    if (currentAmbient !== 'wedding') return;
-    const o = ctx.createOscillator(); o.type = 'sawtooth';
-    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2.2;
-    const g = ctx.createGain(); g.gain.value = 0;
-    const vib = ctx.createOscillator(); vib.frequency.value = 5.5;   // gamak: gentle vibrato
-    const vg = ctx.createGain(); vg.gain.value = 4;
-    vib.connect(vg); vg.connect(o.frequency); vib.start();
-    o.connect(f); f.connect(g); g.connect(ambBus);
-    let t = now() + 0.1;
-    let idx = 2 + ((Math.random() * (SCALE.length - 2)) | 0);
-    let freq = SCALE[idx];
-    o.frequency.setValueAtTime(freq, t);
-    const n = 4 + (Math.random() * 4 | 0);
-    for (let i = 0; i < n; i++) {
-      idx = Math.max(0, Math.min(SCALE.length - 1, idx + ((Math.random() * 5) | 0) - 2));
-      const dur = [0.35, 0.35, 0.7, 1.05][(Math.random() * 4) | 0];
-      o.frequency.setValueAtTime(freq, t);
-      o.frequency.exponentialRampToValueAtTime(SCALE[idx], t + 0.09); // meend: slide into the note
-      freq = SCALE[idx];
-      f.frequency.setValueAtTime(freq * 2.5, t);
-      g.gain.linearRampToValueAtTime(0.045, t + 0.08);
-      g.gain.linearRampToValueAtTime(0.028, t + dur);
-      t += dur;
-    }
-    g.gain.linearRampToValueAtTime(0.0001, t + 0.5);
-    o.start(); o.stop(t + 0.7); vib.stop(t + 0.7);
-    setTimeout(phrase, (t - now()) * 1000 + 1200 + Math.random() * 2500);
-  })();
-}
-
 // name: forest | palace | night | heaven | ascetic | radiance | sorrow | wedding
 export function setAmbient(name) {
   if (!ctx) { pendingAmbient = name; return; } // audio unlocks on the first gesture
@@ -221,7 +194,7 @@ export function setAmbient(name) {
       scheduleBirds(0.4); scheduleBowl([174.6, 220]);
       break;
     case 'wedding':
-      addWind(0.03, 300); addWedding();
+      addAmbientFile('assets/mp3/drums.mp3'); // drums alone, no synth bed
       break;
     case 'sorrow':
       addWind(0.05, 220); addDrone(110, 0.02, 'sine'); addDrone(130.8, 0.014); addDrone(174.6, 0.008);

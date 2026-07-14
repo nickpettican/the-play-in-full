@@ -18,6 +18,7 @@
 </script>
 </head>
 <body>
+<div id="tabs" style="position:fixed;top:0;right:0;background:rgba(10,12,20,0.7);padding:6px 10px;"></div>
 <div id="hint">Drag to orbit, wheel to zoom, right-drag to pan. Current game designs; add variants to ROSTER.</div>
 <script type="module">
 import * as THREE from 'three';
@@ -25,30 +26,44 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { makePerson, makeBuddha, makeBowl, makeNameLabel,
          makeHorse, makeDeer, makeElephant, makeCarriage } from './src/characters.js';
 
+const SET = new URLSearchParams(location.search).get('set') || 'current';
+const tabs = document.getElementById('tabs');
+for (const s of ['current', 'cute', 'cuter']) {
+  const b = document.createElement('button');
+  b.textContent = s; b.disabled = s === SET;
+  b.onclick = () => location.search = '?set=' + s;
+  tabs.appendChild(b);
+}
+
 // Every design currently used in the game (deduped from acts.js / player.js / npc.js).
-// To try a new design, add an entry here with different opts.
+// p: makePerson opts, b: makeBuddha opts, make: anything else. mona: gets the outer robe.
+// Tabs inject proportions: cute/cuter add chibi (and outerRobe to monastics).
 const ROSTER = [
-  { name: 'Buddha', make: () => makeBuddha(), anim: 'sit' },
-  { name: 'Prince Siddhārtha', make: () => makePerson({ kind: 'prince', robe: 0xe8b84a, skin: 0xd8a877, halo: 'gold', ornate: true }) },
-  { name: 'Ascetic (fasting)', make: () => makePerson({ kind: 'ascetic', skinny: true, robe: 0x9a8a6a, skin: 0xb08a5c, halo: 'gold' }), anim: 'sit' },
-  { name: 'Ascetic', make: () => makePerson({ kind: 'ascetic', robe: 0x9a8a6a, skin: 0xa87a50 }) },
-  { name: 'Monk (player)', make: () => makePerson({ kind: 'monk', robe: 0xcc7722, skin: 0xc8996c }), bowl: true },
-  { name: 'Nun (player)', make: () => makePerson({ kind: 'nun', robe: 0xb35c2e, skin: 0xd8a877 }) },
-  { name: 'Queen Māyā', make: () => makePerson({ kind: 'laywoman', robe: 0xc23a5f, skin: 0xd8a877 }) },
-  { name: 'Gopā', make: () => makePerson({ kind: 'laywoman', robe: 0xd84a6a, skin: 0xd8a877, ornate: true }) },
-  { name: 'Sujātā', make: () => makePerson({ kind: 'laywoman', robe: 0xd88a4a, skin: 0xd8a877, scale: 0.75 }) },
-  { name: 'King Śuddhodana', make: () => makePerson({ kind: 'layman', robe: 0xb8862c, skin: 0xd8a877, ornate: true }) },
-  { name: 'Layman', make: () => makePerson({ kind: 'layman', robe: 0x7a7a5a, skin: 0xc0a070 }) },
-  { name: 'Old man', make: () => makePerson({ kind: 'layman', robe: 0x8a8a7a, skin: 0xb08a60, hair: 'long', hairColor: 0xe8e8e8 }) },
-  { name: 'Deva (Tushita)', make: () => makePerson({ kind: 'deva', robe: 0xfff6e0, skin: 0xe8c9a0, ornate: true, halo: 'gold', scale: 2.0 }) },
-  { name: 'Devī (goddess)', make: () => makePerson({ kind: 'devi', robe: 0xc9a86a, skin: 0xb08a5c, ornate: true, scale: 2 }) },
-  { name: 'Māra', make: () => makePerson({ kind: 'demon', robe: 0x6a1a1a, skin: 0x8a2a1a, scale: 2.2, ornate: true }) },
-  { name: 'Demon soldier', make: () => makePerson({ kind: 'demon', robe: 0x5a2a2a, skin: 0x7a3a2a, scale: 1.2 }) },
+  { name: 'Buddha', b: {}, anim: 'sit', mona: true },
+  { name: 'Bodhisattva (monk)', p: { kind: 'monk', robe: 0xd8a832, skin: 0xc8996c, halo: 'gold' }, anim: 'sit', mona: true },
+  { name: 'Prince Siddhārtha', p: { kind: 'prince', robe: 0xe8b84a, skin: 0xd8a877, halo: 'gold', ornate: true } },
+  { name: 'Ascetic (fasting)', p: { kind: 'ascetic', skinny: true, robe: 0x9a8a6a, skin: 0xb08a5c, halo: 'gold' }, anim: 'sit' },
+  { name: 'Ascetic', p: { kind: 'ascetic', robe: 0x9a8a6a, skin: 0xa87a50 } },
+  { name: 'Monk (player)', p: { kind: 'monk', robe: 0x9a4318, skin: 0xc8996c, outerRobe: true }, bowl: true, mona: true },
+  { name: 'Nun (player)', p: { kind: 'nun', robe: 0xb35c2e, skin: 0xd8a877, outerRobe: true }, mona: true },
+  { name: 'Queen Māyā', p: { kind: 'laywoman', robe: 0xc23a5f, skin: 0xd8a877, ornate: true } },
+  { name: 'Laywoman', p: { kind: 'laywoman', robe: 0x6a4a8a } },
+  { name: 'Gopā', p: { kind: 'laywoman', robe: 0xd84a6a, skin: 0xd8a877, ornate: true } },
+  { name: 'Sujātā', p: { kind: 'laywoman', robe: 0xd88a4a, skin: 0xd8a877, scale: 0.75 } },
+  { name: 'King Śuddhodana', p: { kind: 'layman', robe: 0xb8862c, skin: 0xd8a877, ornate: true } },
+  { name: 'Layman', p: { kind: 'layman', robe: 0x7a7a5a, skin: 0xc0a070 } },
+  { name: 'Old man', p: { kind: 'layman', robe: 0x8a8a7a, skin: 0xb08a60, hair: 'long', hairColor: 0xe8e8e8 } },
+  { name: 'Deva (Tushita)', p: { kind: 'deva', robe: 0xfff6e0, skin: 0xe8c9a0, ornate: true, halo: 'gold', scale: 2.0 } },
+  { name: 'Devī (goddess)', p: { kind: 'devi', robe: 0xc9a86a, skin: 0xb08a5c, ornate: true, scale: 2 } },
+  { name: 'Māra', p: { kind: 'demon', robe: 0x6a1a1a, skin: 0x8a2a1a, scale: 2.2, ornate: true } },
+  { name: 'Demon soldier', p: { kind: 'demon', robe: 0x5a2a2a, skin: 0x7a3a2a, scale: 1.2 } },
   { name: 'Kanthaka (horse)', make: () => makeHorse(0xf2ead8) },
   { name: 'Deer', make: () => makeDeer() },
   { name: 'White elephant', make: () => makeElephant(true) },
   { name: 'Carriage', make: () => makeCarriage() },
 ];
+// proportion presets per tab: tweak chibi (0..1) to taste, then move into the game
+const TABS = { current: 0, cute: 0.2, cuter: 1 };
 
 // scene
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -65,15 +80,20 @@ const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 32),
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 //#557448
+const chibi = TABS[SET] ?? 0;
+const build = (e) => e.make ? e.make()
+  : e.b ? makeBuddha({ ...e.b, chibi, outerRobe: chibi > 0 && e.mona })
+  : makePerson({ ...e.p, chibi, outerRobe: chibi > 0 && e.mona });
+
 // lay out in a grid, wide spacing so the big ones don't overlap
-const COLS = 5, SPACE = 4.5;
+const COLS = 5, SPACE = 4.5, SPACEZ = 4.5;
 const rows = Math.ceil(ROSTER.length / COLS);
 const updaters = [];
 ROSTER.forEach((entry, i) => {
   const col = i % COLS, row = (i / COLS) | 0;
   const x = (col - (COLS - 1) / 2) * SPACE;
-  const z = (row - (rows - 1) / 2) * SPACE;
-  const C = entry.make();
+  const z = (row - (rows - 1) / 2) * SPACEZ;
+  const C = build(entry);
   C.group.position.set(x, 0, z);
   if (entry.anim && C.setAnim) C.setAnim(entry.anim);
   if (entry.bowl) {
@@ -93,12 +113,13 @@ ROSTER.forEach((entry, i) => {
 });
 
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 200);
-camera.position.set(0, 6, rows * SPACE / 2 + 14);
+camera.position.set(0, 3.5, rows * SPACE / 2 + COLS * SPACE * 0.55);
 const orbit = new OrbitControls(camera, renderer.domElement);
 orbit.target.set(0, 1, 0);
 orbit.update();
 
-// hook for scripted screenshots (same as posetest)
+// hooks for scripted screenshots (same as posetest)
+window.__target = (x, y, z) => { orbit.target.set(x, y, z); orbit.update(); };
 window.__cam = (yaw, pitch, dist) => {
   const t = orbit.target;
   camera.position.set(

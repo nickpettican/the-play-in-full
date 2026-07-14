@@ -16,7 +16,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - run: rsync -a --exclude=raw --exclude=docs --exclude=posetest.html --exclude=.git --exclude=.github ./ _site/
+      - run: rsync -a --exclude=raw --exclude=docs --exclude=posetest.html --exclude=charactertest.html --exclude=README.md --exclude=CLAUDE.md --exclude=.git --exclude=.github ./ _site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

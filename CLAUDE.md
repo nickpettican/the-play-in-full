@@ -7,7 +7,7 @@ Lalitavistara Sutra (Spanish title: "La Obra Completa").
 
 1. **Never fabricate scripture.** Narration is verbatim from the 84000 translation in
    `raw/extracted/play-in-full-lalitavistara-toh95.md`; NPC answers are faithful quotations
-   with a `src` attribution. Full rules in `CONTENT-GUIDE.md`. Never machine-translate
+   with a `src` attribution. Full rules in `docs/CONTENT-GUIDE.md`. Never machine-translate
    scripture — that is why the Spanish content is deferred.
 2. **No build step.** Serve the repo root statically (`python -m http.server 8433`) and open
    `index.html`. The user manages the server; assume it is already running on port 8433.
@@ -23,4 +23,4 @@ Lalitavistara Sutra (Spanish title: "La Obra Completa").
 - `docs/architecture.md` — module map, boot flow, act lifecycle, worlds, dialogue, NPCs.
 - `docs/characters-and-poses.md` — the character rig, pose conventions, posetest workflow.
 - `docs/testing.md` — e2e hooks, puppeteer patterns, screenshot camera maths, known gotchas.
-- `CONTENT-GUIDE.md` — adding dialogue/quotes/characters, i18n, quote-fidelity rules.
+- `docs/CONTENT-GUIDE.md` — adding dialogue/quotes/characters, i18n, quote-fidelity rules.

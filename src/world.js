@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { scene, loadModel, instantiate, setFogRange } from './engine.js';
 import { player } from './player.js';
-import { makeHorse } from './characters.js';
+import { makeHorse, makePerson } from './characters.js';
+import { petalsFrom } from './particles.js';
 
 // ---------- periodic value noise (tileable => seamless world wrap) ----------
 function hash2(ix, iz, seed) {
@@ -23,9 +24,9 @@ function periodicNoise(x, z, period, seed) {
 
 export let world = null;
 const _dryC = new THREE.Color(0xbd9a64);
-
+//#919259
 class World {
-  constructor({ size = 280, hills = 1.6, seed = 7, baseColor = 0x235347, dirtColor = 0xb2905c, baseHeight = 0 }) {
+  constructor({ size = 280, hills = 1.6, seed = 7, baseColor = 0x28463f, dirtColor = 0x77784e, baseHeight = 0 }) {
     this.size = size; this.seed = seed; this.hills = hills; this.baseHeight = baseHeight;
     this.flats = [];        // {x,z,r,h} circular blend-to-height
     this.colliders = [];    // {x,z,r,h?}
@@ -105,35 +106,33 @@ class World {
   }
 
   scatterGrass(n = 3000, exclude = []) {
-    const S = this.size;
-    // rounded shrub tufts rather than spiky blades
-    const geo = new THREE.IcosahedronGeometry(0.16, 0);
-    geo.scale(2, 1.72, 2);
-    geo.translate(0, 0.2, 0);
-    // white base: instance colours multiply the material colour, so the pastel lives in setColorAt
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true });
-    const im = new THREE.InstancedMesh(geo, mat, n);
-    const M = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), e = new THREE.Euler();
-    const col = new THREE.Color();
-    let placed = 0, guard = 0;
-    while (placed < n && guard++ < n * 4) {
-      const x = (Math.random() - 0.5) * S, z = (Math.random() - 0.5) * S;
-      if (exclude.some(f => Math.hypot(x - f.x, z - f.z) < f.r)) continue;
-      const y = this.groundHeight(x, z);
-      if (y < this.waterLevel + 0.15) continue;
-      e.set((Math.random() - 0.5) * 0.3, Math.random() * Math.PI, (Math.random() - 0.5) * 0.3);
-      q.setFromEuler(e);
-      const s = 0.7 + Math.random() * 1.1;
-      sc.set(s, s * (0.7 + Math.random() * 0.8), s);
-      M.compose(new THREE.Vector3(x, y, z), q, sc);
-      im.setMatrixAt(placed, M);
-      col.set(PASTEL_GREENS[(Math.random() * PASTEL_GREENS.length) | 0]);
-      col.offsetHSL(0, 0, (Math.random() - 0.5) * 0.08);
-      im.setColorAt(placed, col);
-      placed++;
-    }
-    im.count = placed;
-    this.group.add(im);
+    // shrub GLB tufts replace the old icosahedra; loaded async, so the
+    // undergrowth pops in a beat after the terrain — harmless during the fade
+    loadModel('shrub').then(shrub => {
+      const im = new THREE.InstancedMesh(extractPlantGeo(shrub),
+        new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), n);
+      const M = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), e = new THREE.Euler();
+      const col = new THREE.Color();
+      let placed = 0, guard = 0;
+      while (placed < n && guard++ < n * 4) {
+        const x = (Math.random() - 0.5) * this.size, z = (Math.random() - 0.5) * this.size;
+        if (exclude.some(f => Math.hypot(x - f.x, z - f.z) < f.r)) continue;
+        const y = this.groundHeight(x, z);
+        if (y < this.waterLevel + 0.15) continue;
+        e.set((Math.random() - 0.5) * 0.25, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.25);
+        q.setFromEuler(e);
+        const h = 0.35 + Math.random() * 0.6;
+        sc.set(h * (0.85 + Math.random() * 0.3), h, h * (0.85 + Math.random() * 0.3));
+        M.compose(new THREE.Vector3(x, y - 0.02, z), q, sc);
+        im.setMatrixAt(placed, M);
+        col.set(PASTEL_GREENS[(Math.random() * PASTEL_GREENS.length) | 0]);
+        col.offsetHSL(0, 0, (Math.random() - 0.5) * 0.08);
+        im.setColorAt(placed, col);
+        placed++;
+      }
+      im.count = placed;
+      this.group.add(im);
+    });
   }
 
   addWater(y = -0.4) {
@@ -161,6 +160,49 @@ class World {
   update(dt, t) { for (const u of this.updaters) u(dt, t); }
 }
 World.prototype.waterLevel = -999;
+
+// Sitting devas scattered across the sky, translucent, gently bobbing —
+// the hosts of gods witnessing the great deeds (acts II and IX).
+// Same placement idea as scatterGrass: random spread, but lifted high above ground.
+export function scatterGods(W, n = 100, { cx = 0, cz = 0 } = {}) {
+  const robes = [0xe8d8f8, 0xf8e8c8, 0xd8e8f8, 0xf8d8e0];
+  const hands = [];
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, r = 14 + Math.sqrt(Math.random()) * W.size * 0.28;
+    const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+    const y = Math.max(W.groundHeight(x, z), W.waterLevel) + 25 + Math.random() * 22;
+    const P = makePerson({
+      kind: i % 2 ? 'devi' : 'deva', robe: robes[(Math.random() * 4) | 0],
+      ornate: true, scale: 2 + Math.random() * 0.5,
+    });
+    P.setAnim(Math.random() < 0.35 ? 'idle' : 'sit'); // some stand in the air, the rest are seated
+    P.group.traverse(o => {
+      o.castShadow = false;
+      if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.6; }
+    });
+    P.group.position.set(x, y, z);
+    P.group.rotation.y = Math.atan2(cx - x, cz - z); // facing the deed below
+    W.group.add(P.group);
+    for (const elb of [P.elbL, P.elbR]) { // an empty at the palm: where the petals leave the hand
+      const h = new THREE.Object3D(); h.position.y = -0.36; elb.add(h); hands.push(h);
+    }
+    const ph = Math.random() * 9;
+    W.updaters.push((dt, t) => { P.update(dt, t); P.group.position.y = y + Math.sin(t * 0.5 + ph) * 0.4; });
+  }
+  petalsFrom(hands); // the gods scatter flowers over the deed below
+}
+
+// first mesh of a GLB scene, baked to world transform, base at y=0, height 1
+function extractPlantGeo(src) {
+  let geo = null;
+  src.updateMatrixWorld(true);
+  src.traverse(o => { if (o.isMesh && !geo) geo = o.geometry.clone().applyMatrix4(o.matrixWorld); });
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox, h = bb.max.y - bb.min.y;
+  geo.translate(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
+  geo.scale(1 / h, 1 / h, 1 / h);
+  return geo;
+}
 
 // ---------- procedural props ----------
 function proceduralTree(flower = false) {
@@ -231,13 +273,14 @@ function house() {
 // a masonry stair in the east wing, jharokha balconies over the facade, chhatri
 // cupolas and a great onion dome. Floors, stair and railings are solid blocks,
 // so both storeys are fully walkable. Courtyard: local x -7..7, z -6..4.
+// 0xe87f66
 function proceduralPalace(W, x, z) {
   const g = new THREE.Group();
   const gy = W.groundHeight(x, z);
   const B = (x0, x1, z0, z1, y0, y1) => W.addBlock(x + x0, x + x1, z + z0, z + z1, gy + y0, gy + y1);
   const L = (color, extra) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
   // warm emissive keeps the shade side rosy rather than brick-brown, Monument Valley style
-  const stone = L(0xe87f66, { emissive: 0x3a150e }), stoneDark = L(0xbc5c4a, { emissive: 0x2a0f0a }), cream = L(0xf5ead2);
+  const stone = L(0xe88b66, { emissive: 0x3a150e }), stoneDark = L(0xbc5c4a, { emissive: 0x2a0f0a }), cream = L(0xf5ead2);
   const red = L(0xcf4f42), gold = L(0xd9a52c, { emissive: 0x4a3510 }), leaf = L(0x55997a);
   const box = (w, h, d, m, px, py, pz, ry = 0) => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
@@ -824,7 +867,7 @@ function pastelRemap(m) {
   m.color.getHSL(hsl);
   if (hsl.h > 0.16 && hsl.h < 0.5 && hsl.s > 0.12) {           // foliage
     // deeper, richer greens than the shrub set: big canopies wash out otherwise
-    m.color.set([0x2e7050, 0x3f8264, 0x4f9068][(Math.random() * 3) | 0]);
+    m.color.set([0x235742, 0x306852, 0x3d7355][(Math.random() * 3) | 0]);
     m.color.offsetHSL(0, 0.08, (Math.random() - 0.5) * 0.04);
     // dense GLB canopies self-shadow heavily; a touch of self-glow lifts the dark faces
     if (m.emissive) m.emissive.copy(m.color).multiplyScalar(0.12);
@@ -878,7 +921,7 @@ async function forest(W, treeNames, count, opts = {}) {
 // ---------- world builders ----------
 
 export async function buildJetaGrove() {
-  const W = new World({ size: 300, hills: 1.4, seed: 11, baseColor: 0x548c46 });
+  const W = new World({ size: 300, hills: 1.4, seed: 11, baseColor: 0x49723e });
   W.flatten(0, 0, 26, 0.2);          // clearing with the Buddha's tree
   W.flatten(-40, 30, 14, 0.5);
   W.buildTerrain();
@@ -946,7 +989,7 @@ export async function buildTushita() {
 }
 
 export async function buildKapilavastu() {
-  const W = new World({ size: 300, hills: 1.2, seed: 37, baseColor: 0x6a8f4c, dirtColor: 0xbd9a64 });
+  const W = new World({ size: 300, hills: 1.2, seed: 37, baseColor: 0x597543, dirtColor: 0xa4834e });
   W.flatten(0, -50, 42, 1.3, 24);   // palace plateau: flat under the whole footprint
   W.flatten(-30, -44, 10, 1.3, 8);  // stables, west of the palace
   W.flatten(-64, -30, 15, 1.0, 11); // the lesser palaces, well outside the king's wall
@@ -1076,7 +1119,7 @@ export async function buildKapilavastu() {
 }
 
 export async function buildLumbini() {
-  const W = new World({ size: 260, hills: 1.0, seed: 51, baseColor: 0x4e8c56, dirtColor: 0x74a468 });
+  const W = new World({ size: 260, hills: 1.0, seed: 51, baseColor: 0x45724b, dirtColor: 0x628958 });
   W.flatten(0, 0, 22, 0.3);
   W.buildTerrain();
   W.addWater(-1.2);
@@ -1105,7 +1148,7 @@ export async function buildLumbini() {
 
 export async function buildMagadha() {
   // lush green country with a broad river; only the austerity grounds are dry and earthy
-  const W = new World({ size: 320, hills: 2.6, seed: 67, baseColor: 0x4f8340, dirtColor: 0x769650, baseHeight: 2.2 });
+  const W = new World({ size: 320, hills: 2.6, seed: 67, baseColor: 0x446b39, dirtColor: 0x637a47, baseHeight: 2.2 });
   // wide river running north-south, east of the Bodhi tree
   for (let z = -160; z <= 160; z += 10) W.flatten(30 + Math.sin(z * 0.04) * 8, z, 22, -2.2, 9);
   W.flatten(-8, -22, 20, 0.4);   // bodhi tree knoll
@@ -1170,7 +1213,7 @@ export async function buildMagadha() {
 }
 
 export async function buildDeerPark() {
-  const W = new World({ size: 280, hills: 0.9, seed: 83, baseColor: 0x498440, dirtColor: 0x6c9454, baseHeight: 0.8 });
+  const W = new World({ size: 280, hills: 0.9, seed: 83, baseColor: 0x406b39, dirtColor: 0x5c794a, baseHeight: 0.8 });
   // river at west
   for (let z = -140; z <= 140; z += 12) W.flatten(-52 + Math.sin(z * 0.05) * 5, z, 10, -2.0);
   W.flatten(0, -8, 24, 0.35);  // teaching clearing
@@ -1185,6 +1228,8 @@ export async function buildDeerPark() {
   mound.receiveShadow = true;
   W.group.add(mound);
   W.camBlockers.push(mound);
+  // walkable: an inscribed solid block so the player can step up onto it
+  W.addBlock(-1.55, 1.55, -11.55, -8.45, mound.position.y - 0.275, mound.position.y + 0.275);
   W.spots.dais = new THREE.Vector3(0, 0, -10);
   W.spots.ascetics = new THREE.Vector3(0, 0, -6);
   // bones near the river (charnel ground)
@@ -1206,7 +1251,7 @@ export async function buildDeerPark() {
 }
 
 export async function buildKushinagar() {
-  const W = new World({ size: 260, hills: 1.1, seed: 97, baseColor: 0x64844c, dirtColor: 0x8c7e54 });
+  const W = new World({ size: 260, hills: 1.1, seed: 97, baseColor: 0x546c43, dirtColor: 0x736849 });
   W.flatten(0, -4, 20, 0.25);
   W.buildTerrain();
   const willow = await loadModel('willow');

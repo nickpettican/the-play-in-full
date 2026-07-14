@@ -3,29 +3,30 @@ import * as THREE from 'three';
 
 // shared geometries
 const G = {
-  head: new THREE.CapsuleGeometry(0.105, 0.13, 4, 8),        // pill head
+  head: new THREE.CapsuleGeometry(0.105, 0.1, 4, 8),       // pill head (total height 0.323: 5% shorter)
   neck: new THREE.CylinderGeometry(0.045, 0.05, 0.1, 7),
-  torso: new THREE.CylinderGeometry(0.235, 0.145, 0.55, 9),  // wide shoulders, narrow waist
-  torsoSkinny: new THREE.CylinderGeometry(0.21, 0.08, 0.55, 9),
+  torso: new THREE.CylinderGeometry(0.235, 0.145, 0.7, 9),  // wide shoulders, narrow waist
+  torsoSkinny: new THREE.CylinderGeometry(0.2, 0.06, 0.55, 9), // fasting: ribs and hollow belly
   skirt: new THREE.CylinderGeometry(0.15, 0.26, 0.85, 9),
   skirtOver: new THREE.CylinderGeometry(0.155, 0.27, 0.38, 9),  // women: short layer, waist to thigh
   skirtUnder: new THREE.CylinderGeometry(0.265, 0.31, 0.58, 9), // women: main skirt, top flush with the layer's hem
-  wrap: new THREE.CylinderGeometry(0.16, 0.18, 0.3, 9),      // short waist robe (ascetic)
+  wrap: new THREE.CylinderGeometry(0.125, 0.145, 0.3, 9),    // short waist robe (ascetic)
   armUp: new THREE.CapsuleGeometry(0.05, 0.28, 3, 6),      // upper arm (shoulder to elbow)
   armLo: new THREE.CapsuleGeometry(0.044, 0.28, 3, 6),     // forearm (elbow to wrist)
-  armUpThin: new THREE.CapsuleGeometry(0.035, 0.28, 3, 6),
-  armLoThin: new THREE.CapsuleGeometry(0.03, 0.28, 3, 6),
+  armUpThin: new THREE.CapsuleGeometry(0.03, 0.28, 3, 6),
+  armLoThin: new THREE.CapsuleGeometry(0.025, 0.28, 3, 6),
   leg: new THREE.CapsuleGeometry(0.06, 0.62, 3, 6),
-  legThin: new THREE.CapsuleGeometry(0.042, 0.62, 3, 6),
+  legThin: new THREE.CapsuleGeometry(0.031, 0.62, 3, 6),
   hand: new THREE.SphereGeometry(0.05, 6, 5),
   shoulder: new THREE.SphereGeometry(0.075, 7, 6),
-  sitBase: new THREE.CylinderGeometry(0.28, 0.32, 0.22, 9),
+  sitBase: new THREE.CylinderGeometry(0.25, 0.37, 0.28, 9),
   horn: new THREE.ConeGeometry(0.04, 0.16, 6),
   crownRing: new THREE.TorusGeometry(0.11, 0.02, 6, 12),
   necklace: new THREE.TorusGeometry(0.15, 0.018, 6, 14),
   bowl: new THREE.SphereGeometry(0.075, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55),
   hairCap: new THREE.SphereGeometry(0.125, 9, 7, 0, Math.PI * 2, 0, Math.PI * 0.62),
   hairBack: new THREE.CapsuleGeometry(0.09, 0.22, 3, 7),
+  hairBackF: new THREE.CapsuleGeometry(0.108, 0.7, 3, 7),  // women: twice as long, 1.2× wider
   bun: new THREE.SphereGeometry(0.062, 8, 6),
   ushnisha: new THREE.SphereGeometry(0.055, 8, 6),
   eye: new THREE.SphereGeometry(0.017, 6, 5),                // scaled to a tall ellipse below
@@ -117,14 +118,77 @@ export function makeNameLabel(text) {
   return sp;
 }
 
+// ---------- monastic outer robe ----------
+// Default drape parameters — tune in posetest.html (?mode=robe) and paste back here.
+export const OUTER_ROBE = {
+  p0x: 0.05, p0y: 0.53, p1x: 0.19, p1y: 0.5, p2x: 0.15, p2y: -0.04,
+  p3x: 0.18, p3y: -0.34, p4x: 0.23, p4y: -0.81,
+  start: -0.37, len: 1.77,          // lathe angles, in units of π
+  rotY: 3.13,                  // the opening bares the right shoulder and arm
+  x: 0, y: 0.06, z: 0,
+  sx: 1.22, sy: 1, sz: 0.9,
+  topMul: 1.21, botLerp: -0.14,    // shading: darker shoulder, lighter hem
+  fz: 0,                           // hem pushed forward (shear): shoulder stays put
+};
+// nuns: a slightly fuller drape over the wider hips
+export const OUTER_ROBE_NUN = { ...OUTER_ROBE, p3x: 0.22, p3y: -0.33, p4x: 0.26 };
+// seated monastics and the Buddha: a short drape ending above the seat base
+export const OUTER_ROBE_SIT = {
+  p0x: 0.05, p0y: 0.53, p1x: 0.2, p1y: 0.5, p2x: 0.14, p2y: -0.06,
+  p3x: 0.15, p3y: -0.11, p4x: 0.16, p4y: -0.14,
+  start: -0.37, len: 1.77,
+  rotY: 3.13,
+  x: 0, y: 0.06, z: 0,
+  sx: 1.22, sy: 1, sz: 0.9,
+  topMul: 1.21, botLerp: -0.14,
+  fz: -0.01,
+};
+
+// A flared drape over the left shoulder, right shoulder bare.
+// Caller multiplies scale.y by its torso squash.
+export function makeOuterRobe(robe, o = OUTER_ROBE) {
+  const pts = [[o.p0x, o.p0y], [o.p1x, o.p1y], [o.p2x, o.p2y], [o.p3x, o.p3y], [o.p4x, o.p4y]]
+    .map(([x, y]) => new THREE.Vector2(x, y));
+  const geo = new THREE.LatheGeometry(pts, 18, Math.PI * o.start, Math.PI * o.len);
+  const top = new THREE.Color(robe).multiplyScalar(o.topMul);
+  const bot = new THREE.Color(robe).lerp(new THREE.Color(0xfff2d8), o.botLerp);
+  const ys = pts.map(p => p.y), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const posA = geo.attributes.position, cols = new Float32Array(posA.count * 3), cc = new THREE.Color();
+  for (let i = 0; i < posA.count; i++) {
+    const k = Math.min(1, Math.max(0, (posA.getY(i) - minY) / (maxY - minY || 1)));
+    cc.copy(bot).lerp(top, k);
+    cols[i * 3] = cc.r; cols[i * 3 + 1] = cc.g; cols[i * 3 + 2] = cc.b;
+    // fz: shear the hem forward while the shoulder stays put (seated legs sit forward)
+    if (o.fz) posA.setZ(i, posA.getZ(i) + o.fz * (1 - k));
+  }
+  if (o.fz) geo.computeVertexNormals();
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  const drape = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
+    vertexColors: true, flatShading: true, side: THREE.DoubleSide,
+  }));
+  drape.rotation.y = o.rotY;
+  drape.position.set(o.x, o.y, o.z);
+  drape.scale.set(o.sx, o.sy, o.sz);
+  return drape;
+}
+
 // ---------- humanoid ----------
-// opts: {kind, robe, skin, halo, scale, ornate, hair, hairColor, skinny, handsJoined}
+// opts: {kind, robe, skin, halo, scale, ornate, hair, hairColor, skinny, handsJoined,
+//        chibi, outerRobe}
 // hair: 'bald' | 'long' | 'bun' (long hair + man-bun at the back) | 'ushnisha' (Buddha only)
+// chibi: 0..1 — bigger head, shorter legs and arms (0 = classic proportions)
+// outerRobe: drape the monastic outer robe over the left shoulder, right shoulder bare
 export function makePerson(opts = {}) {
   const {
-    kind = 'monk', robe = 0xcc7722, skin = 0xc8996c,
+    kind = 'monk', robe = 0x9a4318, outerRobeColour = 0xcc7722, skin = 0xc8996c,
     halo = null, scale = 1, ornate = false, skinny = false, handsJoined = false,
+    chibi = 0.2, outerRobe = false,
   } = opts;
+  const legS = 1 - 0.55 * chibi;                // leg shortening
+  const standY = 0.85 - 0.75 * (1 - legS);      // hip height standing
+  const sitY = 0.34 - 0.06 * chibi;
+  const yK = standY / 0.85;                     // squashes the skirt band down with the hips
+  const tK = 1 - 0.35 * chibi;                  // torso squash: neck/head/arms ride down with it
   const female = kind === 'nun' || kind === 'laywoman' || kind === 'devi';
   const monastic = kind === 'monk' || kind === 'nun';
   let hair = opts.hair;
@@ -138,25 +202,28 @@ export function makePerson(opts = {}) {
   const hairM = mat(hairColor);
   const root = new THREE.Group();
   const body = new THREE.Group();          // everything above the hips
-  body.position.y = 0.85;
+  body.position.y = standY;
   root.add(body);
 
   // torso — flattened front-to-back: wide at the shoulders, shallow chest and back
   const torso = new THREE.Mesh(skinny ? G.torsoSkinny : G.torso, skinny ? skinM : robeM);
-  torso.position.y = 0.28;
+  torso.position.y = 0.21 * tK;
   torso.scale.z = 0.58;
+  torso.scale.y = tK;
   if (female && !skinny) torso.scale.x = 0.92;
   body.add(torso);
   // neck
   const neck = new THREE.Mesh(G.neck, skinM);
-  neck.position.y = 0.59;
+  neck.position.y = 0.59 * tK;
+  neck.scale.y = tK;
   body.add(neck);
 
   // head
   const headG = new THREE.Group();
-  headG.position.y = 0.7;
+  headG.position.y = (0.7 - 0.05 * chibi) * tK;
+  headG.scale.setScalar(1 + 0.6 * chibi);   // chibi: a big head on a small frame
   const head = new THREE.Mesh(G.head, skinM);
-  head.position.y = 0.12;
+  head.position.y = 0.09;
   headG.add(head);
   body.add(headG);
 
@@ -168,15 +235,16 @@ export function makePerson(opts = {}) {
   const eyesOpen = [], eyesShut = [], eyesSlit = [];
   for (const s of [-1, 1]) {
     const e = new THREE.Mesh(angry ? G.eyeAngry : G.eye, eyeM);
-    e.position.set(s * 0.047, angry ? 0.12 : 0.105, 0.098);
+    e.position.set(s * 0.047, angry ? 0.1 : 0.08, 0.098);
     if (angry) e.rotation.z = s * 0.5; // inner corners down: a scowl
     headG.add(e); eyesOpen.push(e);
     const c = new THREE.Mesh(G.eyeShut, eyeM);
-    c.position.set(s * 0.047, 0.098, 0.098);
+    c.position.set(s * 0.047, 0.08, 0.098);
+    if (skinny || kind === 'ascetic') c.rotation.z = Math.PI; // ∪ instead of ∩: the austerity years, sorrowful
     c.visible = false;
     headG.add(c); eyesShut.push(c);
     const sl = new THREE.Mesh(G.eyeSlit, eyeM);
-    sl.position.set(s * 0.047, 0.105, 0.096);
+    sl.position.set(s * 0.047, 0.08, 0.098);
     sl.visible = false;
     headG.add(sl); eyesSlit.push(sl);
   }
@@ -189,10 +257,11 @@ export function makePerson(opts = {}) {
   // hair
   if (hair === 'long' || hair === 'bun') {
     const cap = new THREE.Mesh(G.hairCap, hairM);
-    cap.position.y = 0.17; cap.scale.set(1.06, 1.1, 1.06);
+    cap.position.y = 0.15; cap.scale.set(1, 1, 1);
     headG.add(cap);
-    const back = new THREE.Mesh(G.hairBack, hairM);   // long hair down the back
-    back.position.set(0, -0.02, -0.1);
+    const back = new THREE.Mesh(female ? G.hairBackF : G.hairBack, hairM); // long hair down the back
+    back.position.set(0, female ? -0.13 : -0.02, -0.1); // dropped so the crown stays put
+    if (female) back.scale.set(1.15, 1, 0.8); // a flat sheet of hair lying against the back
     back.rotation.x = 0.15;
     headG.add(back);
     if (hair === 'bun') {
@@ -202,7 +271,7 @@ export function makePerson(opts = {}) {
     }
   } else if (hair === 'ushnisha') {
     const cap = new THREE.Mesh(G.hairCap, hairM);     // hugging the skull, no hat-brim rim
-    cap.position.y = 0.19; cap.scale.set(0.92, 0.82, 0.92);
+    cap.position.y = 0.16; cap.scale.set(0.92, 0.82, 0.92);
     headG.add(cap);
     const u = new THREE.Mesh(G.ushnisha, hairM);      // crown protuberance on top
     u.position.y = 0.29;
@@ -221,7 +290,8 @@ export function makePerson(opts = {}) {
   // legs — women's hips are set a little wider at the top, feet in the same place
   const legL = new THREE.Group(), legR = new THREE.Group();
   const hipX = female && !skinny ? 0.125 : 0.09;
-  legL.position.set(-hipX, 0.9, 0); legR.position.set(hipX, 0.9, 0);
+  legL.position.set(-hipX, standY + 0.05, 0); legR.position.set(hipX, standY + 0.05, 0);
+  legL.scale.y = legR.scale.y = legS;
   if (female && !skinny) { legL.rotation.z = 0.037; legR.rotation.z = -0.037; }
   const legGeo = skinny ? G.legThin : G.leg;
   const legMat = (monastic || skinny || kind === 'ascetic' || kind === 'demon') ? skinM : robeM;
@@ -230,26 +300,31 @@ export function makePerson(opts = {}) {
   root.add(legL, legR);
   // women wear a short flared layer over the main skirt, which begins where the layer ends
   const skirt = new THREE.Mesh(skinny ? G.wrap : (female ? G.skirtUnder : G.skirt), robeM);
-  skirt.position.y = skinny ? 0.86 : female ? 0.25 : 0.45; // female: top at 0.54, just under the layer's hem (0.53)
+  skirt.position.y = (skinny ? 0.86 : female ? 0.25 : 0.45) * yK; // female: top just under the layer's hem
   skirt.scale.z = 0.68; // hips flattened front-to-back like the torso
+  skirt.scale.y = skinny ? 1 : yK;
   root.add(skirt);
   let overSkirt = null;
   if (female && !skinny) {
     overSkirt = new THREE.Mesh(G.skirtOver, robeM);
-    overSkirt.position.y = 0.72;
+    overSkirt.position.y = 0.72 * yK;
     overSkirt.scale.z = 0.68;
+    overSkirt.scale.y = yK;
     root.add(overSkirt);
   }
 
   // arms — jointed at the elbow; monastics' right arm is bare (robe over the left shoulder only)
   const bareArms = skinny || kind === 'ascetic' || kind === 'demon';
   const armL = new THREE.Group(), armR = new THREE.Group();
-  armL.position.set(-0.255, 0.52, 0); armR.position.set(0.255, 0.52, 0);
+  const armX = skinny ? 0.21 : 0.255; // thinner torso, so the shoulders sit closer in
+  armL.position.set(-armX, 0.52 * tK, 0); armR.position.set(armX, 0.52 * tK, 0);
   let elbL = null, elbR = null;
   for (const [g, s] of [[armL, -1], [armR, 1]]) {
     // the -x arm is the character's anatomical right when facing forward
     const bare = bareArms || (monastic && s === -1);
-    const sh = new THREE.Mesh(G.shoulder, bare ? skinM : robeM); g.add(sh);
+    const sh = new THREE.Mesh(G.shoulder, bare ? skinM : robeM);
+    if (skinny) sh.scale.setScalar(0.62); // bony shoulder
+    g.add(sh);
     const up = new THREE.Mesh(skinny ? G.armUpThin : G.armUp, bare ? skinM : robeM);
     up.position.y = -0.18; g.add(up);
     const elb = new THREE.Group();
@@ -261,17 +336,28 @@ export function makePerson(opts = {}) {
     g.rotation.z = s * 0.08;
     elb.rotation.x = -0.12; // natural slight bend
     if (s === -1) elbL = elb; else elbR = elb;
-    if (kind === 'buddha') g.scale.y = 1.25; // the Buddha's arms reach a little further
+    // the Buddha's arms reach a little further; chibi arms are stubbier
+    g.scale.y = (kind === 'buddha' ? 1.25 : 1) * (1 - 0.3 * chibi);
   }
   body.add(armL, armR);
+
+  let drape = null, drapeSit = null;
+  if (outerRobe) {
+    drape = makeOuterRobe(robe, female ? OUTER_ROBE_NUN : OUTER_ROBE);
+    drape.scale.y *= tK;
+    drapeSit = makeOuterRobe(robe, OUTER_ROBE_SIT);
+    drapeSit.scale.y *= tK;
+    drapeSit.visible = false;
+    body.add(drape, drapeSit);
+  }
 
   if (ornate) {
     const goldM = mat(0xe6b93f, 0x805f10);
     const neckl = new THREE.Mesh(G.necklace, goldM);
-    neckl.position.y = 0.52; neckl.rotation.x = Math.PI / 2.4;
+    neckl.position.y = 0.55 * tK; neckl.rotation.x = Math.PI / 2;
     body.add(neckl);
     const crown = new THREE.Mesh(G.crownRing, goldM);
-    crown.position.y = 0.24; crown.rotation.x = Math.PI / 2.2;
+    crown.position.y = 0.21; crown.rotation.x = Math.PI / 2.1;
     headG.add(crown);
   }
 
@@ -287,9 +373,9 @@ export function makePerson(opts = {}) {
 
   // ---------- animation state ----------
   const P = {
-    group: root, body, headG, armL, armR, elbL, elbR, legL, legR, skirt,
+    group: root, body, headG, armL, armR, elbL, elbR, legL, legR, skirt, drape, drapeSit, tK,
     anim: null, phase: Math.random() * 10, speed: 0, // null so the first setAnim('idle') runs in full
-    bowT: 0, bowHold: false, haloSprite, height: 1.85 * scale, opts, handsJoined,
+    bowT: 0, bowHold: false, haloSprite, height: (standY + (0.82 + 0.28 * chibi) * tK + 0.18) * scale, opts, handsJoined,
   };
 
   const restArms = () => {
@@ -313,9 +399,11 @@ export function makePerson(opts = {}) {
       legL.visible = legR.visible = false;
       skirt.visible = false;
       if (overSkirt) overSkirt.visible = false;
-      body.position.y = 0.34;
+      if (drape) { drape.visible = false; drapeSit.visible = true; }
+      body.position.y = sitY;
       const base = P._sitBase || (P._sitBase = new THREE.Mesh(G.sitBase, robeM)); // always cloth, never skin
       base.position.y = 0.11;
+      base.position.z = 0.1;
       base.scale.z = 0.82;
       root.add(base);
       base.visible = true;
@@ -324,7 +412,7 @@ export function makePerson(opts = {}) {
         // earth-witness: right arm (the -x arm) hangs straight down over the right knee,
         // fingers to the earth; left elbow out and back, hand resting at the navel
         armL.rotation.set(-0.03, 0.66, -0.07); elbL.rotation.set(-0.44, -0.04, -0.36);
-        armR.rotation.set(-0.02, 0.32, 0.16); elbR.rotation.set(-0.73, 0.25, -1.32);
+        armR.rotation.set(-0.02, 0.16, 0.16); elbR.rotation.set(-0.73, 0.25, -1.32);
       } else if (!handsJoined) {
         // meditation: elbows out, forearms across the lap, hands meeting just before the navel
         armL.rotation.set(-0.13, -1.09, -0.2); elbL.rotation.set(-0.79, 0.59, 1.65);
@@ -334,7 +422,8 @@ export function makePerson(opts = {}) {
       legL.visible = legR.visible = true;
       skirt.visible = true;
       if (overSkirt) overSkirt.visible = true;
-      body.position.y = 0.85;
+      if (drape) { drape.visible = true; drapeSit.visible = false; }
+      body.position.y = standY;
       if (P._sitBase) P._sitBase.visible = false;
       restArms();
       if (a === 'lie') root.rotation.z = Math.PI / 2 - 0.12;
@@ -345,21 +434,21 @@ export function makePerson(opts = {}) {
     P.phase += dt * (P.anim === 'walk' ? 6.5 * Math.max(P.speed, 0.6) : P.anim === 'rage' ? 5 : 1.4);
     const ph = P.phase;
     if (P.anim === 'walk') {
-      const legAmp = monastic || kind === 'buddha' ? 0.14 : 0.55; // composed monastic gait
+      const legAmp = monastic || kind === 'buddha' ? 0.14 : 0.35; // composed monastic gait
       legL.rotation.x = Math.sin(ph) * legAmp;
       legR.rotation.x = Math.sin(ph + Math.PI) * legAmp;
       if (!handsJoined && !P.lockArms) {
         armL.rotation.x = Math.sin(ph + Math.PI) * 0.35;
         armR.rotation.x = Math.sin(ph) * 0.35;
       }
-      body.position.y = 0.85 + Math.abs(Math.sin(ph)) * 0.03;
+      body.position.y = standY + Math.abs(Math.sin(ph)) * 0.03;
     } else if (P.anim === 'idle') {
       legL.rotation.x = legR.rotation.x = 0;
       if (!handsJoined && !P.lockArms) { armL.rotation.x = armR.rotation.x = 0; }
-      body.position.y = 0.85 + Math.sin(ph * 0.8) * 0.008; // breathing
+      body.position.y = standY + Math.sin(ph * 0.8) * 0.008; // breathing
       headG.rotation.y = Math.sin(ph * 0.3) * 0.15;
     } else if (P.anim === 'sit') {
-      body.position.y = 0.34 + Math.sin(ph * 0.7) * 0.006;
+      body.position.y = sitY + Math.sin(ph * 0.7) * 0.006;
     } else if (P.anim === 'rage') {
       // fierce flailing: arms whirl, body twists and lunges
       armL.rotation.x = -1.1 + Math.sin(ph * 2.1) * 1.1;
@@ -368,7 +457,7 @@ export function makePerson(opts = {}) {
       armR.rotation.z = 0.5 - Math.sin(ph * 1.7 + 1) * 0.4;
       body.rotation.z = Math.sin(ph * 1.3) * 0.16;
       body.rotation.x = 0.15 + Math.sin(ph * 2.7) * 0.2;
-      body.position.y = 0.85 + Math.abs(Math.sin(ph * 1.9)) * 0.06;
+      body.position.y = standY + Math.abs(Math.sin(ph * 1.9)) * 0.06;
     }
     if (P.bowHold) {
       body.rotation.x = 0.65; // held still in a bow (age, grief, offering)
@@ -407,7 +496,7 @@ export function makePerson(opts = {}) {
 export function makeBuddha(opts = {}) {
   const P = makePerson({
     kind: 'buddha', robe: 0x9a7418, skin: 0xd8b24a,
-    hair: 'ushnisha', hairColor: 0x141430,
+    hair: 'ushnisha', hairColor: 0x141430, outerRobe: true,
     halo: 'gold', handsJoined: true, scale: 1.25, ...opts,
   });
   P.bhumisparsha = true;
@@ -421,7 +510,10 @@ export function makeBuddha(opts = {}) {
 
 // ---------- begging bowl ----------
 export function makeBowl() {
-  return new THREE.Mesh(G.bowl, mat(0x4a3424));
+  // double-sided: the shell is open on top, so from above only the inside shows
+  return new THREE.Mesh(G.bowl, new THREE.MeshLambertMaterial({
+    color: 0x4a3424, flatShading: true, side: THREE.DoubleSide,
+  }));
 }
 
 // ---------- quadrupeds (built facing +z so rotation.y = atan2(dx,dz) works) ----------
@@ -502,8 +594,8 @@ export function makeElephant(white = true) {
   inner.rotation.y = -Math.PI / 2; // authored along +x; face +z
   root.add(inner);
   const M = mat(white ? 0xf5f2ea : 0x9a9088, white ? 0x333029 : 0);
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.75, 12, 9), M);
-  body.scale.set(1.35, 1, 1);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.68, 0.75, 6, 12), M);
+  body.rotation.z = Math.PI / 2; // pill lying along +x
   body.position.y = 1.15;
   inner.add(body);
   for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
@@ -516,10 +608,14 @@ export function makeElephant(white = true) {
   const hd = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), M);
   head.add(hd);
   for (const s of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), M);
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), M);
     ear.scale.set(0.15, 1, 0.8);
-    ear.position.set(-0.1, 0.05, s * 0.42);
+    ear.position.set(-0.12, 0.08, s * 0.46);
+    ear.rotation.x = s * 0.25; // flare outward
     head.add(ear);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), mat(0x201a14));
+    eye.position.set(0.26, 0.12, s * 0.33);
+    head.add(eye);
   }
   let py = -0.25, px = 0.32, r = 0.11;
   for (let i = 0; i < 5; i++) {
@@ -529,12 +625,15 @@ export function makeElephant(white = true) {
     head.add(seg);
     py -= 0.24; px += 0.07 + i * 0.015; r *= 0.85;
   }
-  // six tusks, three a side, fanned so each reads clearly
+  // six tusks, three a side, each pivoted at the head surface so it stays connected
   for (const s of [-1, 1]) for (let i = 0; i < 3; i++) {
-    const t = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.72 - i * 0.14, 6), mat(0xfff6dd, 0x554d33));
-    t.position.set(0.34 + i * 0.02, -0.3 - i * 0.07, s * (0.15 + i * 0.11));
-    t.rotation.z = -1.7 + i * 0.18;         // fanned forward
-    t.rotation.x = s * (0.18 + i * 0.3);    // splayed outward
+    const len = 1.05 - i * 0.15;
+    const geo = new THREE.ConeGeometry(0.05, len, 6);
+    geo.translate(0, len / 2, 0); // base at the pivot, tip pointing +y
+    const t = new THREE.Mesh(geo, mat(0xfff6dd, 0x554d33));
+    t.position.set(0.1, -0.25, s * (0.12 + i * 0.09)); // on the head sphere, beside the trunk
+    t.rotation.z = -2.5 + i * 0.18;         // fanned forward, drooping down
+    t.rotation.x = s * (-0.25 + i * 0.28);   // splayed outward
     head.add(t);
   }
   inner.add(head);
