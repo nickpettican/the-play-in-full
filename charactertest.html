@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Character tester</title>
+<style>
+  body { margin: 0; font: 13px/1.4 monospace; background: #223; color: #eee; }
+  #hint { position: fixed; top: 0; left: 0; background: rgba(10,12,20,0.7);
+          padding: 6px 10px; color: #99a; font-size: 11px; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="hint">Drag to orbit, wheel to zoom, right-drag to pan. Current game designs; add variants to ROSTER.</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { makePerson, makeBuddha, makeBowl, makeNameLabel,
+         makeHorse, makeDeer, makeElephant, makeCarriage } from './src/characters.js';
+
+// Every design currently used in the game (deduped from acts.js / player.js / npc.js).
+// To try a new design, add an entry here with different opts.
+const ROSTER = [
+  { name: 'Buddha', make: () => makeBuddha(), anim: 'sit' },
+  { name: 'Prince Siddhārtha', make: () => makePerson({ kind: 'prince', robe: 0xe8b84a, skin: 0xd8a877, halo: 'gold', ornate: true }) },
+  { name: 'Ascetic (fasting)', make: () => makePerson({ kind: 'ascetic', skinny: true, robe: 0x9a8a6a, skin: 0xb08a5c, halo: 'gold' }), anim: 'sit' },
+  { name: 'Ascetic', make: () => makePerson({ kind: 'ascetic', robe: 0x9a8a6a, skin: 0xa87a50 }) },
+  { name: 'Monk (player)', make: () => makePerson({ kind: 'monk', robe: 0xcc7722, skin: 0xc8996c }), bowl: true },
+  { name: 'Nun (player)', make: () => makePerson({ kind: 'nun', robe: 0xb35c2e, skin: 0xd8a877 }) },
+  { name: 'Queen Māyā', make: () => makePerson({ kind: 'laywoman', robe: 0xc23a5f, skin: 0xd8a877 }) },
+  { name: 'Gopā', make: () => makePerson({ kind: 'laywoman', robe: 0xd84a6a, skin: 0xd8a877, ornate: true }) },
+  { name: 'Sujātā', make: () => makePerson({ kind: 'laywoman', robe: 0xd88a4a, skin: 0xd8a877, scale: 0.75 }) },
+  { name: 'King Śuddhodana', make: () => makePerson({ kind: 'layman', robe: 0xb8862c, skin: 0xd8a877, ornate: true }) },
+  { name: 'Layman', make: () => makePerson({ kind: 'layman', robe: 0x7a7a5a, skin: 0xc0a070 }) },
+  { name: 'Old man', make: () => makePerson({ kind: 'layman', robe: 0x8a8a7a, skin: 0xb08a60, hair: 'long', hairColor: 0xe8e8e8 }) },
+  { name: 'Deva (Tushita)', make: () => makePerson({ kind: 'deva', robe: 0xfff6e0, skin: 0xe8c9a0, ornate: true, halo: 'gold', scale: 2.0 }) },
+  { name: 'Devī (goddess)', make: () => makePerson({ kind: 'devi', robe: 0xc9a86a, skin: 0xb08a5c, ornate: true, scale: 2 }) },
+  { name: 'Māra', make: () => makePerson({ kind: 'demon', robe: 0x6a1a1a, skin: 0x8a2a1a, scale: 2.2, ornate: true }) },
+  { name: 'Demon soldier', make: () => makePerson({ kind: 'demon', robe: 0x5a2a2a, skin: 0x7a3a2a, scale: 1.2 }) },
+  { name: 'Kanthaka (horse)', make: () => makeHorse(0xf2ead8) },
+  { name: 'Deer', make: () => makeDeer() },
+  { name: 'White elephant', make: () => makeElephant(true) },
+  { name: 'Carriage', make: () => makeCarriage() },
+];
+
+// scene
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8fb4c8);
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x557755, 1.1));
+const sun = new THREE.DirectionalLight(0xffe8c0, 1.6);
+sun.position.set(4, 8, 6);
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 32),
+  new THREE.MeshLambertMaterial({ color: 0x557448 }));
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+//#557448
+// lay out in a grid, wide spacing so the big ones don't overlap
+const COLS = 5, SPACE = 4.5;
+const rows = Math.ceil(ROSTER.length / COLS);
+const updaters = [];
+ROSTER.forEach((entry, i) => {
+  const col = i % COLS, row = (i / COLS) | 0;
+  const x = (col - (COLS - 1) / 2) * SPACE;
+  const z = (row - (rows - 1) / 2) * SPACE;
+  const C = entry.make();
+  C.group.position.set(x, 0, z);
+  if (entry.anim && C.setAnim) C.setAnim(entry.anim);
+  if (entry.bowl) {
+    C.lockArms = true;
+    C.armL.rotation.set(-0.12, 0.3, -0.13); C.elbL.rotation.set(-1.35, 0, 0.55);
+    C.armR.rotation.set(-0.12, -0.3, 0.13); C.elbR.rotation.set(-1.35, 0, -0.55);
+    const bowl = makeBowl();
+    bowl.scale.setScalar(2);
+    bowl.position.set(0, 0.28, 0.32);
+    C.body.add(bowl);
+  }
+  scene.add(C.group);
+  const label = makeNameLabel(entry.name);
+  label.position.set(x, (C.height ?? 2.2) + 0.5, z);
+  scene.add(label);
+  if (C.update) updaters.push(C.update);
+});
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(0, 6, rows * SPACE / 2 + 14);
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.target.set(0, 1, 0);
+orbit.update();
+
+// hook for scripted screenshots (same as posetest)
+window.__cam = (yaw, pitch, dist) => {
+  const t = orbit.target;
+  camera.position.set(
+    t.x + Math.sin(yaw) * Math.cos(pitch) * dist,
+    t.y + Math.sin(pitch) * dist,
+    t.z + Math.cos(yaw) * Math.cos(pitch) * dist);
+  orbit.update();
+};
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  for (const u of updaters) u(dt, t);
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

@@ -28,8 +28,14 @@ const G = {
   hairBack: new THREE.CapsuleGeometry(0.09, 0.22, 3, 7),
   bun: new THREE.SphereGeometry(0.062, 8, 6),
   ushnisha: new THREE.SphereGeometry(0.055, 8, 6),
+  eye: new THREE.SphereGeometry(0.017, 6, 5),                // scaled to a tall ellipse below
+  eyeShut: new THREE.TorusGeometry(0.024, 0.006, 4, 10, Math.PI), // ∩ crescent: peaceful meditation eyes
+  eyeSlit: new THREE.BoxGeometry(0.036, 0.007, 0.012),       // horizontal slit: sleeping
+  eyeAngry: new THREE.BoxGeometry(0.05, 0.013, 0.012),       // angled bar: demons' glare
 };
 G.bowl.rotateX(Math.PI); // open side up
+G.eye.scale(0.7, 1.25, 0.55);
+G.eyeShut.scale(1, 0.6, 1); // gentler arc: shallow peaceful crescents
 
 const MATS = {};
 function mat(hex, emissive = 0) {
@@ -154,6 +160,32 @@ export function makePerson(opts = {}) {
   headG.add(head);
   body.add(headG);
 
+  // eyes: tall elliptical dots; crescents in meditation (the Buddha always);
+  // horizontal slits when lying asleep. Placed below the hair-cap rim (~0.12).
+  // The Buddha's are dark blue; everyone else's near-black.
+  const angry = kind === 'demon'; // Māra and his army glare, dark red and slanted
+  const eyeM = mat(kind === 'buddha' ? 0x1c2f6e : angry ? 0x4a100a : 0x16120e);
+  const eyesOpen = [], eyesShut = [], eyesSlit = [];
+  for (const s of [-1, 1]) {
+    const e = new THREE.Mesh(angry ? G.eyeAngry : G.eye, eyeM);
+    e.position.set(s * 0.047, angry ? 0.12 : 0.105, 0.098);
+    if (angry) e.rotation.z = s * 0.5; // inner corners down: a scowl
+    headG.add(e); eyesOpen.push(e);
+    const c = new THREE.Mesh(G.eyeShut, eyeM);
+    c.position.set(s * 0.047, 0.098, 0.098);
+    c.visible = false;
+    headG.add(c); eyesShut.push(c);
+    const sl = new THREE.Mesh(G.eyeSlit, eyeM);
+    sl.position.set(s * 0.047, 0.105, 0.096);
+    sl.visible = false;
+    headG.add(sl); eyesSlit.push(sl);
+  }
+  const setEyes = (shape) => {
+    for (const e of eyesOpen) e.visible = shape === 'open';
+    for (const c of eyesShut) c.visible = shape === 'shut';
+    for (const sl of eyesSlit) sl.visible = shape === 'slit';
+  };
+
   // hair
   if (hair === 'long' || hair === 'bun') {
     const cap = new THREE.Mesh(G.hairCap, hairM);
@@ -256,7 +288,7 @@ export function makePerson(opts = {}) {
   // ---------- animation state ----------
   const P = {
     group: root, body, headG, armL, armR, elbL, elbR, legL, legR, skirt,
-    anim: 'idle', phase: Math.random() * 10, speed: 0,
+    anim: null, phase: Math.random() * 10, speed: 0, // null so the first setAnim('idle') runs in full
     bowT: 0, bowHold: false, haloSprite, height: 1.85 * scale, opts, handsJoined,
   };
 
@@ -275,6 +307,8 @@ export function makePerson(opts = {}) {
     if (P.anim === a) return;
     P.anim = a;
     root.rotation.z = 0;
+    // the Buddha keeps crescent eyes always, even lying at the parinirvāṇa
+    setEyes(kind === 'buddha' ? 'shut' : a === 'sit' ? 'shut' : a === 'lie' ? 'slit' : 'open');
     if (a === 'sit') {
       legL.visible = legR.visible = false;
       skirt.visible = false;
@@ -341,8 +375,24 @@ export function makePerson(opts = {}) {
     } else if (P.bowT > 0) {
       P.bowT = Math.max(0, P.bowT - dt);
       const k = Math.sin(Math.min(1, (1.4 - P.bowT) / 0.5) * Math.PI * 0.5);
-      body.rotation.x = k * 0.7 * Math.min(1, P.bowT / 0.4 + 0.3);
+      body.rotation.x = k * 0.3 * Math.min(1, P.bowT / 0.4 + 0.3);
     } else if (P.anim !== 'rage') body.rotation.x *= 0.85;
+    // hands drawn to añjali (namaste) at the chest while bowing
+    if ((P.bowHold || P.bowT > 0) && !P.lockArms) {
+      P._anjali = true;
+      const s = Math.min(1, dt * 8);
+      const tw = (o, r) => {
+        o.rotation.x += (r[0] - o.rotation.x) * s;
+        o.rotation.y += (r[1] - o.rotation.y) * s;
+        o.rotation.z += (r[2] - o.rotation.z) * s;
+      };
+      tw(armL, [-0.41, 0.1, 0.09]); tw(elbL, [-2.72, 0.42, 0.73]);
+      tw(armR, [-0.41, -0.1, -0.09]); tw(elbR, [-2.72, -0.42, -0.73]);
+    } else if (P._anjali) {
+      // ponytail: arms snap back to the interrupted pose; ease-out if it reads abruptly
+      P._anjali = false;
+      const a = P.anim; P.anim = null; P.setAnim(a);
+    }
     if (haloSprite) haloSprite.material.opacity = 0.75 + Math.sin(t * 2.2 + P.phase) * 0.15;
     if (P.bodyHalo) P.bodyHalo.material.opacity = 0.16 + Math.sin(t * 1.4 + P.phase) * 0.04;
   };
@@ -479,10 +529,12 @@ export function makeElephant(white = true) {
     head.add(seg);
     py -= 0.24; px += 0.07 + i * 0.015; r *= 0.85;
   }
+  // six tusks, three a side, fanned so each reads clearly
   for (const s of [-1, 1]) for (let i = 0; i < 3; i++) {
-    const t = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.5, 6), mat(0xfff6dd, 0x554d33));
-    t.position.set(0.3 + i * 0.06, -0.28 - i * 0.05, s * (0.18 + i * 0.05));
-    t.rotation.z = -1.8;
+    const t = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.72 - i * 0.14, 6), mat(0xfff6dd, 0x554d33));
+    t.position.set(0.34 + i * 0.02, -0.3 - i * 0.07, s * (0.15 + i * 0.11));
+    t.rotation.z = -1.7 + i * 0.18;         // fanned forward
+    t.rotation.x = s * (0.18 + i * 0.3);    // splayed outward
     head.add(t);
   }
   inner.add(head);
@@ -493,36 +545,88 @@ export function makeElephant(white = true) {
 }
 
 // ---------- carriage (built along +x; inner group turns it to face +z travel) ----------
-export function makeCarriage() {
+export function makeCarriage(c = {}) {
   const root = new THREE.Group();
   const inner = new THREE.Group();
   inner.rotation.y = -Math.PI / 2;
   root.add(inner);
-  const wood = mat(0x7a4a26), goldM = mat(0xd9a52c, 0x6b4f10);
-  const base = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 1.0), wood);
-  base.position.y = 0.62;
+  const wood = mat(c.wood ?? 0x7a4a26), woodDark = mat(c.woodDark ?? 0x543218);
+  const goldM = mat(c.gold ?? 0xd9a52c, 0x6b4f10);
+  const crimson = mat(c.cloth ?? 0xa3352c), cream = mat(c.trim ?? 0xf0e3c8);
+  // the royal platform, carved rails and a cushioned seat
+  const base = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.14, 1.3), wood);
+  base.position.y = 0.72;
   inner.add(base);
-  const posts = [[-0.7, -0.42], [0.7, -0.42], [-0.7, 0.42], [0.7, 0.42]];
-  for (const [x, z] of posts) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 6), goldM);
-    p.position.set(x, 1.32, z);
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.06, 1.4), goldM);
+  rim.position.y = 0.66;
+  inner.add(rim);
+  for (const s of [-1, 1]) {                       // carved side panels
+    const p = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.42, 0.08), woodDark);
+    p.position.set(0, 1.0, s * 0.62);
+    inner.add(p);
+    const t = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.06, 0.1), goldM);
+    t.position.set(0, 1.23, s * 0.62);
+    inner.add(t);
+  }
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.42, 1.2), woodDark);
+  back.position.set(-1.02, 1.0, 0);
+  inner.add(back);
+  const cushion = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 1.0), crimson);
+  cushion.position.set(-0.35, 0.84, 0);
+  inner.add(cushion);
+  for (const [x, z] of [[-0.95, -0.55], [0.95, -0.55], [-0.95, 0.55], [0.95, 0.55]]) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.5, 6), goldM);
+    p.position.set(x, 1.55, z);
     inner.add(p);
   }
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.15, 0.45, 4), mat(0xa3352c));
+  // two-tier canopy with a gold kalasha finial and hanging pendants
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.55, 0.5, 4), crimson);
   roof.rotation.y = Math.PI / 4;
-  roof.position.y = 2.2;
+  roof.position.y = 2.5;
   inner.add(roof);
+  const eave = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.06, 1.5), cream);
+  eave.position.y = 2.28;
+  inner.add(eave);
+  const roof2 = new THREE.Mesh(new THREE.ConeGeometry(0.85, 0.42, 4), crimson);
+  roof2.rotation.y = Math.PI / 4;
+  roof2.position.y = 2.95;
+  inner.add(roof2);
+  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), goldM);
+  orb.position.y = 3.22;
+  inner.add(orb);
+  const fin = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.04, 0.3, 5), goldM);
+  fin.position.y = 3.42;
+  inner.add(fin);
+  for (const [x, z] of [[-1.05, -0.65], [1.05, -0.65], [-1.05, 0.65], [1.05, 0.65]]) {
+    const pd = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 5), goldM);
+    pd.rotation.x = Math.PI;
+    pd.position.set(x, 2.2, z);
+    inner.add(pd);
+  }
+  // the draw-pole reaching forward to the horse's yoke
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 2.4, 6), wood);
+  pole.rotation.z = Math.PI / 2 - 0.12;
+  pole.position.set(2.1, 0.55, 0);
+  inner.add(pole);
+  // great spoked wheels with gilded hubs, joined by an axle
   const wheels = [];
-  for (const [x, z] of [[-0.55, -0.55], [0.55, -0.55], [-0.55, 0.55], [0.55, 0.55]]) {
-    const w = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.05, 6, 12), wood);
-    w.position.set(x, 0.32, z);
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5, 6), woodDark);
+  axle.rotation.x = Math.PI / 2;
+  axle.position.set(0, 0.52, 0);
+  inner.add(axle);
+  for (const [x, z] of [[-0.75, -0.68], [0.75, -0.68], [-0.75, 0.68], [0.75, 0.68]]) {
+    const w = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.06, 6, 14), wood);
+    w.position.set(x, 0.52, z);
     inner.add(w); wheels.push(w);
-    for (let i = 0; i < 4; i++) {
-      const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.55, 4), wood);
-      sp.rotation.z = i * Math.PI / 4;
+    for (let i = 0; i < 8; i++) {
+      const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.94, 4), wood);
+      sp.rotation.z = i * Math.PI / 8;
       w.add(sp);
     }
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.1, 8), goldM);
+    hub.rotation.x = Math.PI / 2;
+    w.add(hub);
   }
   root.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  return { group: root, wheels, update(dt, moving) { if (moving) for (const w of wheels) w.rotation.z -= dt * 2.2; } };
+  return { group: root, wheels, update(dt, moving) { if (moving) for (const w of wheels) w.rotation.z -= dt * 1.6; } };
 }

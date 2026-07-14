@@ -60,6 +60,10 @@ const MODES = {
     aLx: -0.12, aLy: 0.3, aLz: -0.13, eLx: -1.35, eLy: 0, eLz: 0.55,
     aRx: -0.12, aRy: -0.3, aRz: 0.13, eRx: -1.35, eRy: 0, eRz: -0.55,
     by: 0.28, bz: 0.32 } },
+  namaste: { sit: false, who: 'monk', mirror: true, body: true, vals: {
+    aLx: -0.15, aLy: 0.35, aLz: -0.15, eLx: -1.9, eLy: 0.25, eLz: 0.7,
+    aRx: -0.15, aRy: -0.35, aRz: 0.15, eRx: -1.9, eRy: -0.25, eRz: -0.7,
+    bx: 0.3 } },
 };
 const M = MODES[mode];
 const vals = { ...M.vals };
@@ -116,6 +120,7 @@ const GROUPS = [
   ['elbR', ['eRx', 'eRy', 'eRz']],
 ];
 if (M.bowl) GROUPS.push(['bowl', ['by', 'bz']]);
+if (M.body) GROUPS.push(['body bow', ['bx']]);
 const sl = document.getElementById('sliders');
 const inputs = {};
 for (const [title, keys] of GROUPS) {
@@ -147,13 +152,15 @@ function apply() {
   P.armR.rotation.set(vals.aRx, vals.aRy, vals.aRz);
   P.elbR.rotation.set(vals.eRx, vals.eRy, vals.eRz);
   if (bowl) bowl.position.set(0, vals.by, vals.bz);
+  if (M.body) P.body.rotation.x = vals.bx;
   const f = n => (Math.round(n * 100) / 100).toString();
   out.textContent =
     `armL.rotation.set(${f(vals.aLx)}, ${f(vals.aLy)}, ${f(vals.aLz)}); ` +
     `elbL.rotation.set(${f(vals.eLx)}, ${f(vals.eLy)}, ${f(vals.eLz)});\n` +
     `armR.rotation.set(${f(vals.aRx)}, ${f(vals.aRy)}, ${f(vals.aRz)}); ` +
     `elbR.rotation.set(${f(vals.eRx)}, ${f(vals.eRy)}, ${f(vals.eRz)});` +
-    (bowl ? `\nbowl.position.set(0, ${f(vals.by)}, ${f(vals.bz)});` : '');
+    (bowl ? `\nbowl.position.set(0, ${f(vals.by)}, ${f(vals.bz)});` : '') +
+    (M.body ? `\nbody.rotation.x = ${f(vals.bx)};` : '');
 }
 mirror.onchange = apply;
 apply();

@@ -29,7 +29,8 @@
   #title h2{font-size:clamp(.85rem,2.2vw,1.15rem);letter-spacing:.32em;color:#d8a98e;font-style:italic;font-weight:normal;text-align:center}
   #langStep{display:none;flex-direction:row;gap:2.5rem;margin-top:.5rem}
   #langStep .charCard.off{opacity:.35;cursor:default;pointer-events:none}
-  #langStep .charCard .soon{display:block;font-size:.62rem;letter-spacing:.18em;color:#9a8a68;margin-top:.4rem}
+  #langStep .charCard .soon,#resumeStep .charCard .soon{display:block;font-size:.62rem;letter-spacing:.18em;color:#9a8a68;margin-top:.4rem}
+  #resumeStep{display:none;flex-direction:row;gap:2.5rem;margin-top:.5rem}
   #supportBtn{display:block;margin-top:1.1rem;pointer-events:auto;cursor:pointer;text-decoration:none;
     border:1px solid rgba(232,197,106,.35);background:rgba(232,197,106,.04);color:#c9b68a;
     font-size:.82rem;letter-spacing:.22em;padding:.55rem 1.8rem;transition:all .35s;text-align:center}
@@ -154,6 +155,10 @@
   <div id="charPick">
     <div class="charCard" data-c="monk"><span class="nm">MONK</span></div>
     <div class="charCard" data-c="nun"><span class="nm">NUN</span></div>
+  </div>
+  <div id="resumeStep">
+    <div class="charCard" data-r="resume"><span class="nm">CONTINUE</span><span class="soon"></span></div>
+    <div class="charCard" data-r="restart"><span class="nm">START OVER</span></div>
   </div>
   <div id="loadNote"></div>
   <div id="ctrlHint">WASD move · mouse look · E talk · F bow · R bowl · Ctrl sit · Shift run · Space jump</div>

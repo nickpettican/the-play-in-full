@@ -88,11 +88,11 @@ scene.fog = new THREE.Fog(0xcfe0ee, 60, 420);
 // ---------- day/night presets ----------
 // t: phase name -> palette. lerped over transitions by setDaylight.
 export const DAYLIGHT = {
-  day:       { top: 0x3a7bd5, mid: 0xa8c8e8, bot: 0xf4e3c0, sun: 0xfff2d8, sunI: 2.4, hemiI: 0.82, fog: 0xcfe0ee, el: 0.85, az: 0.5, stars: 0, amb: 0.16, moon: 0 },
-  morning:   { top: 0x5a8fd0, mid: 0xf3c98d, bot: 0xffdfae, sun: 0xffd9a0, sunI: 2.0, hemiI: 0.55, fog: 0xf0dcc0, el: 0.3, az: 1.1, stars: 0, amb: 0.1, moon: 0 },
-  golden:    { top: 0x46609c, mid: 0xe8a06a, bot: 0xffca87, sun: 0xffbe78, sunI: 1.8, hemiI: 0.45, fog: 0xe8c9a4, el: 0.18, az: -1.2, stars: 0, amb: 0.1, moon: 0 },
-  dusk:      { top: 0x1d2547, mid: 0x6a5a8a, bot: 0xd88a5c, sun: 0xff9a55, sunI: 0.9, hemiI: 0.3, fog: 0x584d6a, el: 0.06, az: -1.4, stars: 0.35, amb: 0.09, moon: 0.35 },
-  night:     { top: 0x0d1630, mid: 0x223460, bot: 0x344270, sun: 0xc4d4ff, sunI: 1.05, hemiI: 0.45, fog: 0x1a2542, el: 0.55, az: 2.2, stars: 1, amb: 0.16, moon: 1 },
+  day:       { top: 0x2a8a9e, mid: 0x6fc0b2, bot: 0xf2d2a4, sun: 0xfff2d8, sunI: 2.4, hemiI: 0.82, fog: 0x8cc4b8, el: 0.85, az: 0.5, stars: 0, amb: 0.16, moon: 0 },
+  morning:   { top: 0x3d86b4, mid: 0xd2a98c, bot: 0xf3dcb2, sun: 0xffd9a0, sunI: 2.0, hemiI: 0.55, fog: 0xc9bda6, el: 0.3, az: 1.1, stars: 0, amb: 0.1, moon: 0 },
+  golden:    { top: 0x3d5f9a, mid: 0xc08a78, bot: 0xefc79a, sun: 0xffbe78, sunI: 1.8, hemiI: 0.45, fog: 0xb99b86, el: 0.18, az: -1.2, stars: 0, amb: 0.1, moon: 0 },
+  dusk:      { top: 0x82344a, mid: 0xb85a68, bot: 0x2e7a80, sun: 0xff9a55, sunI: 0.9, hemiI: 0.3, fog: 0x3f5f6a, el: 0.06, az: -1.4, stars: 0.35, amb: 0.09, moon: 0.35 },
+  night:     { top: 0x0a1830, mid: 0x16324e, bot: 0x255468, sun: 0xc4d4ff, sunI: 1.05, hemiI: 0.45, fog: 0x122a3a, el: 0.55, az: 2.2, stars: 1, amb: 0.16, moon: 1 },
   heaven:    { top: 0xffd9ec, mid: 0xffe9c9, bot: 0xfff6e0, sun: 0xfff0d0, sunI: 1.9, hemiI: 0.9, fog: 0xffe7cd, el: 0.6, az: 0.3, stars: 0.15, amb: 0.25, moon: 0 },
   radiance:  { top: 0xf7e8ff, mid: 0xffe2b8, bot: 0xfff4d8, sun: 0xfff6e0, sunI: 2.6, hemiI: 1.0, fog: 0xffeccc, el: 0.5, az: 0.0, stars: 0, amb: 0.3, moon: 0 },
 };
@@ -176,6 +176,7 @@ export function instantiate(src, h, opts = {}) {
         o.material.roughness = Math.max(o.material.roughness, 0.75);
       }
       if (opts.tint) { o.material = o.material.clone(); o.material.color.multiply(opts.tint); }
+      if (opts.remap) { o.material = o.material.clone(); opts.remap(o.material); }
     }
   });
   const g = new THREE.Group();

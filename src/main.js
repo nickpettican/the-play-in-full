@@ -8,10 +8,11 @@ import { startAct, updateActs, game } from './acts.js';
 import { world } from './world.js';
 import { initAudio } from './audio.js';
 import { T, LANG, setLang } from './i18n.js';
+import { actTitle } from './content.js';
 
 const MODELS = [
   'banyan', 'oak', 'mango', 'plain-tree', 'willow', 'bodhi-tree', 'bone-pile',
-  'palace-temple', 'guanyin', 'heavenly-god', 'heavenly-god-02',
+  'guanyin', 'heavenly-god', 'heavenly-god-02',
 ];
 
 const title = document.getElementById('title');
@@ -63,16 +64,43 @@ for (const card of langStep.querySelectorAll('.charCard:not(.off)')) {
   });
 }
 
+// ---------- checkpoint (localStorage 'pif-act', written by startAct) ----------
+const savedAct = parseInt(localStorage.getItem('pif-act'), 10);
+const resumeStep = document.getElementById('resumeStep');
+
+async function begin(kind, act) {
+  loadNote.textContent = loadNote.textContent || ' ';
+  await preloadPromise;
+  createPlayerAvatar(kind);
+  title.classList.add('gone');
+  startAct(act);
+}
+
 for (const card of charPick.querySelectorAll('.charCard')) {
-  card.addEventListener('click', async () => {
+  card.addEventListener('click', () => {
     initAudio();
     charPick.style.display = 'none';
-    loadNote.textContent = loadNote.textContent || ' ';
-    await preloadPromise;
-    createPlayerAvatar(card.dataset.c);
-    title.classList.add('gone');
-    startAct(0);
+    if (savedAct > 0 && savedAct <= 12) {
+      const [num, name] = actTitle(savedAct);
+      resumeStep.querySelector('[data-r="resume"] .nm').textContent = T('resume');
+      resumeStep.querySelector('[data-r="resume"] .soon').textContent = `${num} · ${name}`;
+      resumeStep.querySelector('[data-r="restart"] .nm').textContent = T('restart');
+      resumeStep.style.display = 'flex';
+      resumeStep.querySelector('[data-r="resume"]').onclick = () => { resumeStep.style.display = 'none'; begin(card.dataset.c, savedAct); };
+      resumeStep.querySelector('[data-r="restart"]').onclick = () => { resumeStep.style.display = 'none'; begin(card.dataset.c, 0); };
+    } else begin(card.dataset.c, 0);
   });
+}
+
+// ---------- dev mode: ?act=N jumps straight in (local only) ----------
+const devAct = new URLSearchParams(location.search).get('act');
+if (devAct !== null && ['localhost', '127.0.0.1'].includes(location.hostname)) {
+  (async () => {
+    await preload(MODELS);
+    createPlayerAvatar('monk');
+    title.classList.add('gone');
+    startAct(parseInt(devAct, 10) || 0);
+  })();
 }
 
 // debug/e2e hooks

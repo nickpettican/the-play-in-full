@@ -46,9 +46,14 @@ export const NARRATION = {
   act0: [
     { q: 'Thus did I hear at one time. The Blessed One was staying in Śrāvastī, in Jeta’s Grove, Anāthapiṇḍada’s Park, along with a great saṅgha of twelve thousand monks.', src: LV },
     { q: 'Yet the great wealth and renown he enjoyed were like drops of water rolling off the petals of a lotus flower. The Blessed One remained detached and untainted by it all.', src: LV },
+    // "these gods" on the consent page: the pure-realm gods who came at night to request the sutra
+    { q: 'That night, just as people went to bed, the gods of the pure realms visited the Blessed One.', src: LV },
+    { q: '“Blessed One, please teach this now to benefit the multitude of beings. Teach it to bring them happiness. Teach it out of compassion for the world, to benefit a great multitude of beings, gods and humans alike.”', src: LV },
     { q: 'Out of compassion for these gods, and indeed for the entire world including the gods, the Blessed One remained silent, thereby offering his consent.', src: LV },
   ],
   act1: [
+    // the announcement that "Hearing that" on the next page refers to
+    { q: '“Friends, I will now proceed to Jambudvīpa. In the past when I practiced the conduct of a bodhisattva, I attracted sentient beings through the four activities of giving, pleasant speech, beneficial activity, and demonstrating consistency in speech and aims. But friends, I would be acting without gratitude, and it would be inappropriate, if I were not now to achieve unexcelled, perfect, and complete awakening.”', src: LV, who: 'The Bodhisattva, to the gods' },
     { q: 'Hearing that, the gods of the Heaven of Joy wept and embraced the feet of the Bodhisattva. They said, “Virtuous One, without you, this Heaven of Joy will lose its splendor.”', src: LV },
     { q: 'He then took the crown from his own head and placed it on the head of the bodhisattva Maitreya, saying, “You, virtuous one, shall awaken to perfect and complete buddhahood after me.”', src: LV },
     { q: 'Monks, as he started to move, the Bodhisattva’s body began to shine with a brilliant and dazzling light that surpassed any other celestial light. This unprecedented light illuminated all the vast and enormous realms of the great trichiliocosm.', src: LV },
@@ -59,6 +64,8 @@ export const NARRATION = {
     { q: 'He entered through his mother’s right side in the form of a baby elephant, white in color with six tusks.', src: LV },
   ],
   act3: [
+    // NOTE: acts.js shows slice(0, 2) before the birth and slice(2) after it.
+    { q: 'When Māyādevī arrived at the Lumbinī Grove, she stepped down from her fine chariot. As human and divine maidens encircled her, she wandered from tree to tree and from grove to grove. She looked among all the trees and eventually arrived beneath a very special and exquisite fig tree.', src: LV },
     { q: 'However, at this moment the Bodhisattva’s magnificence and power caused the fig tree itself to bow down and pay homage to him. Māyādevī stretched out her right arm, like a flash of lightning appearing in the middle of the sky, and grasped a branch of the tree.', src: LV },
     { q: 'As soon as he was born, the Bodhisattva stepped onto the ground. Wherever his feet touched the ground, a large lotus immediately sprung from the earth.', src: LV },
     { q: 'Unsupported, he took seven steps toward the east and declared, “I will be the cause of all virtuous practices.”', src: LV },
@@ -67,14 +74,21 @@ export const NARRATION = {
   ],
   act4: [
     { q: 'As soon as the Bodhisattva arrived in school, the schoolmaster, who was called Viśvāmitra, was unable to withstand the Bodhisattva’s splendor and radiance, and prostrated to him face-down on the ground.', src: LV },
+    // the bow of his grandfather Siṃhahanu, which no one since had been able to string
+    { q: '“Son,” the king answered, “your grandfather was called Siṃhahanu. He had a bow that is now being honored in the temple with incense and flower garlands. No one since him has been able to string the bow, let alone draw it.”', src: LV },
     { q: 'Finally the bow was placed before the Bodhisattva. He picked it up and, sitting on his seat in the cross-legged position, he held it with his left hand and strung it with a single fingertip of his right hand.', src: LV },
     { q: 'Monks, the Bodhisattva now picked up an arrow, drew the bow, and released the arrow. His shot was so powerful that the arrow went right through the targets set up by Ānanda, Devadatta, Sundarananda, and Daṇḍapāṇi.', src: LV },
+    // the elephant Devadatta struck down at the city gate
+    { q: 'Later the Bodhisattva arrived riding a chariot and noticed the dead elephant. When he inquired who had killed the animal, he was told that it was Devadatta.', src: LV },
     { q: 'Then, while still on his chariot, the prince extended one foot to the ground, and with his big toe he took hold of the elephant and hurled it a mile outside the city, over seven walls and seven moats. A deep pit formed where the elephant landed.', src: LV },
+    { q: 'Finally the Bodhisattva said, “Enough with this dispute! All of you should convene and propose a mathematical problem for me. Then I will calculate it.”', src: LV },
     { q: 'Accordingly five hundred Śākya boys in unison proposed an unprecedented problem, and still the Bodhisattva calculated it without any consternation. In this way all the Śākya boys met their match while the Bodhisattva remained undefeated.', src: LV },
   ],
   act5: [
     { q: 'Then the daughter of Daṇḍapāṇi Śākya, the Śākya girl named Gopā, surrounded and escorted by an entourage of female servants, came into the assembly hall where the Bodhisattva was seated. She approached the Bodhisattva and stood to one side, staring at him with unblinking eyes.', src: LV },
     { q: 'He then took off his ring, which was worth several hundreds of thousands of silver coins, and gave it to her.', src: LV },
+    // "that" = his supremacy in the arts contest held for Gopā's hand
+    { q: 'In this way the Bodhisattva was superior in all the main aspects of the mundane arts, as well as in all practices beyond the reach of gods and humans.', src: LV },
     { q: 'When that became clear, the Śākya Daṇḍapāṇi decided to give away his daughter, the Śākya girl Gopā, to the Bodhisattva. King Śuddhodana also formally requested her hand in marriage for the Bodhisattva.', src: LV },
   ],
   // one narration per sight, in order: old age, sickness, death, the mendicant
@@ -84,12 +98,19 @@ export const NARRATION = {
     { q: 'The corpse was lying on a stretcher, covered by a cotton cloth. It was surrounded by a group of relatives who wailed, cried, and lamented.', src: LV },
     { q: 'The Bodhisattva saw the mendicant and noticed that he was peaceful. He was self-controlled and restrained. He had pure conduct, and his eyes didn’t wander but looked down ahead at a distance of six feet.', src: LV },
   ],
+  // the night of departure: the consorts revealed in their true aspect (chap. 15)
+  act7women: [
+    { q: 'Right then the god Dharmacārin and the gods of the pure realms made the retinue of consorts appear unappealing.', src: LV },
+    { q: 'When the Bodhisattva looked at the entire retinue of women, he saw that some had garments that had slipped off, some had disheveled hair, and some had their jewelry in disarray. Others had lost their head ornaments, some had ugly shoulders, while some had uncovered arms and legs. Some had repulsive expressions, while the eyes of others were crossed. Some were drooling, and others were snoring.', src: LV },
+    { q: 'The Bodhisattva looked at the retinue of consorts, who were lying there on the floor looking utterly revolting, and he had the impression that he was indeed in a cemetery.', src: LV },
+    { q: 'Monks, indeed the Bodhisattva had become certain. He was filled with distaste and had made up his mind.', src: LV },
+  ],
   act7: [
     { q: '“Friends, tonight the Bodhisattva will leave his home. You must help him leave by carrying the hooves of his fine horse with your hands.”', src: LV },
     { q: '“Enough, Chanda! These sense pleasures are impermanent and unstable. They do not endure and are subject to change. Like the rapids of a mountain torrent, they quickly pass and are turbulent. Like dewdrops, they do not last.”', src: LV },
     { q: 'So he told his servant, “Chanda, don’t badger me now. Instead, without any further delay, bring me my horse Kaṇṭhaka, well adorned.”', src: LV },
     { q: 'The Bodhisattva then thought to himself, “With my hair this long, I cannot be a monk.” So he took his sword, cut off his hair, and then cast it into the air. The gods in the Heaven of the Thirty-Three collected the hair for worship.', src: LV },
-    { q: '“Friends, Prince Siddhārtha has left his home! Friends, Prince Siddhārtha has become a monk! He will awaken to unexcelled, perfect, and complete buddhahood and will turn the wheel of the Dharma.”', src: LV },
+    { q: '“Friends, Prince Siddhārtha has left his home! Friends, Prince Siddhārtha has become a monk! He will awaken to unexcelled, perfect, and complete buddhahood and will turn the wheel of the Dharma.”', src: LV, who: 'The gods' },
   ],
   act8: [
     { q: 'Monks, as I now began living on just a single juniper berry, never taking a second, my body became extremely weak and emaciated.', src: LV },
@@ -98,26 +119,49 @@ export const NARRATION = {
     { q: '“This path does not lead to awakening. This path is incapable of eradicating the continuation of birth, old age, and death in the future. But there must be another path to awakening.”', src: LV },
   ],
   act9a: [
-    { q: '“With these acts and methods I have not been able to manifest any true knowledge that would be higher than manmade teachings. This path does not lead to awakening. But there must be another path to awakening that can eradicate the future suffering of birth, old age, and death.”', src: LV },
+    // act8 already ends on "this path does not lead to awakening" — here he resolves to eat.
+    { q: '“Therefore I shall begin to eat solid food again. That way I can regain my physical strength. Once I do so, I will proceed to the seat of awakening.”', src: LV, who: 'The Bodhisattva' },
+    { q: 'At midnight the gods announced the following to Sujātā, daughter of the villager Nandika, in the village Senāpati in Urubilvā: “The one for whom you have been making offerings has relaxed his discipline and decided that he will once again eat nourishing and solid food. Previously you made the aspiration, ‘May the Bodhisattva take my food and thereby truly attain perfect and completely unexcelled awakening!’ Now that time has come, so you must do what you ought to be doing.”', src: LV },
     { q: 'Monks, as soon as Sujātā heard these words of the gods, she quickly gathered the milk of a thousand cows. Seven times she skimmed the cream from the milk, until she obtained a thick, strength-giving cream. She then poured this cream into a new clay pot, mixed it with the freshest rice, and placed it on a brand-new stove.', src: LV },
     { q: 'The Bodhisattva then had this thought: “Sujātā has offered this food, and if I eat it now, there is no doubt that I shall truly attain perfect and completely unexcelled awakening.” Then the Bodhisattva had his meal.', src: LV },
   ],
   act9b: [
     { q: 'Monks, when the Bodhisattva bathed in the Nairañjanā River and enjoyed a meal, his physical strength came back to him. With a triumphant gait, he now began the walk toward the great Bodhi tree.', src: LV },
-    { q: '“Where did the previous thus-gone ones sit when they attained unsurpassed, genuine and perfect awakening? They sat on a bed of grass!”', src: LV },
+    { q: 'Monks, the Bodhisattva then thought to himself, “Where did the previous thus-gone ones sit when they attained unsurpassed, genuine and perfect awakening? They sat on a bed of grass!”', src: LV },
+    { q: 'Monks, at the right side of the road the Bodhisattva now noticed a grass seller, whose name was Svastika, who was busy cutting grass. The grass was green, soft, fresh, and beautiful.', src: LV },
     { q: 'In this way he sat down on the grass seat and crossed his legs facing toward the east.', src: LV },
+    // ch. 21: he is not ambushed — he summons Māra on purpose, and says why.
+    { q: '“Māra is the supreme lord who holds sway over the desire realm, the most powerful and evil demon. There is no way that I could attain unsurpassed and complete awakening without his knowledge. So I will now arouse that evil Māra. Once I have conquered him, all the gods in the desire realm will also be restrained.”', src: LV, who: 'The Bodhisattva' },
+    { q: 'Monks, Māra, the evil one, was aroused by these verses and had a dream with thirty-two omens.', src: LV },
+    { q: 'When Māra awoke from this dream, he was so terrified that he gathered all his family members.', src: LV },
+    // his son Sārthavāha begs him not to go (his verses are lost in the extraction);
+    // the army is raised only after that warning is ignored.
+    { q: 'Monks, Māra, the evil one, did not pay heed to Sārthavāha’s warning. Instead, he gathered all four divisions of his great and powerful army.', src: LV },
   ],
   act9c: [
     { q: 'It was a terrifying army, so brave in battle that it would make anyone’s hair stand on end. Such an army had never been seen before, or even heard of, in the realms of gods and humans.', src: LV },
     { q: 'However, as soon as the demons released the weapons, the weapons turned into garlands and canopies of flowers, and a cooling rain of flower petals fell on the ground. The flower garlands hung as adornments on the Bodhi tree.', src: LV },
+    { q: 'When Māra, the evil one, witnessed the Bodhisattva’s power and the displays that he performed, his mind was disturbed with jealousy and avarice. He called out to the Bodhisattva, “Listen, young prince, get up! Get up and relish your kingship—your virtue lies precisely in doing that! On what grounds could you ever attain liberation?”', src: LV },
     { q: 'The Bodhisattva replied, “Evil one, the earth here is my witness.”', src: LV },
-    { q: 'Not far from where the Bodhisattva was sitting, she broke through the earth’s surface and revealed her upper body, adorned with all sorts of jewels. She bowed toward the Bodhisattva, joined her palms, and said to him, “You are right. Great Being, you are right. It is just as you say. We bear witness to this.”', src: LV },
+    // NOTE: acts.js pins the earth goddess to index 4 of this array (her rise from the ground).
+    { q: 'Then the earth goddess in this great trichiliocosm who is called Sthāvarā, along with her retinue of one billion earth goddesses, began to shake the entire great earth. Not far from where the Bodhisattva was sitting, she broke through the earth’s surface and revealed her upper body, adorned with all sorts of jewels. She bowed toward the Bodhisattva, joined her palms, and said to him, “You are right. Great Being, you are right. It is just as you say. We bear witness to this.”', src: LV },
   ],
   act9d: [
-    { q: '“How miserable is this world! It is anguished by birth, old age, sickness, death, departure, and rebirth, but it does not know how to remove itself from this massive heap of pure anguish, marked foremost by old age, sickness, and death.”', src: LV },
-    { q: 'Monks, through considering and ruminating over these factors, which had never before been heard, there dawned in the Bodhisattva wisdom, vision, knowledge, intelligence, prudence, and insight, and a light began to shine.', src: LV },
+    // his thought at the break of dawn, just before the awakening
+    { q: '“How miserable is this world! It is anguished by birth, old age, sickness, death, departure, and rebirth, but it does not know how to remove itself from this massive heap of pure anguish, marked foremost by old age, sickness, and death.”', src: LV, who: 'The Bodhisattva' },
     { q: 'Monks, indeed, the very moment that the Bodhisattva attained omniscience, all beings throughout all the worlds in the ten directions instantly became ecstatic. All the worlds were flooded with bright light, including even the dark spaces between them that were riddled with evil.', src: LV },
     { q: 'Monks, the Thus-Gone One abided on the seat of awakening for the first seven days, reflecting, “Here I have brought an end to the suffering of birth, old age, and death, which has been happening since time immemorial.”', src: LV },
+    // ch. 25, Exhortation: the silence, Brahmā's request, the lotus pond, and the compassion that answers it.
+    { q: '“Alas! This truth that I realized and awakened to is profound, peaceful, tranquil, calm, complete, hard to see, hard to comprehend, and impossible to conceptualize since it is inaccessible to the intellect. Only wise noble ones and adepts can understand it.”', src: LV, who: 'The Blessed One' },
+    { q: '“If I were to teach this truth to others, they would not understand it. Teaching the truth would tire me out and be wrongly contested, and it would be futile. Thus I will remain silent and keep this truth in my heart.”', src: LV, who: 'The Blessed One' },
+    { q: '“Alas, this world will be plunged into the great darkness of ignorance! Why don’t we then go and request that the worthy one, the perfectly and completely awakened Thus-Gone One, turn the wheel of Dharma? Because the thus-gone ones do not turn the wheel of Dharma without being requested!”', src: LV, who: 'Great Top-Knotted Brahmā, to Śakra' },
+    // the request itself, made bowing at the Buddha's feet with palms joined
+    { q: '“There are intelligent beings of good disposition with the potential, fortune, and ability to comprehend the meaning of what the Blessed One says. Such being the case, O Blessed One, please eloquently teach the Dharma! Please, O Well-Gone One, teach the Dharma!”', src: LV, who: 'Great Top-Knotted Brahmā, to the Blessed One' },
+    { q: 'Monks, just as when a person standing on the bank of a lotus pond sees some lotuses submerged in the water, some lotuses at water level, and some lotuses above the water, this was how the Thus-Gone One saw sentient beings situated in three groups when he looked throughout the whole world with his awakened eye.', src: LV },
+    { q: 'Monks, in order to show kindness to the world of gods, humans, and nonhumans, the Thus-Gone One looked upon this world with compassion and silently acquiesced to Great Top-Knotted Brahmā.', src: LV },
+    // "their question": the four gods of the Bodhi tree ask where he will teach
+    { q: 'Monks, then the four gods of the Bodhi tree named Dharmaruci, Dharmakāma, Dharmamati, and Dharmacārin fell to the feet of the Thus-Gone One and asked, “Where will the Blessed One turn the wheel of Dharma?”', src: LV },
+    { q: 'Monks, to their question the Thus-Gone One replied, “At the Deer Park by the Hill of the Fallen Sages, outside of Vārāṇasī.”', src: LV },
   ],
   act10: [
     { q: 'Monks, I have actualized immortality and the path that leads to immortality. Monks, I am the awakened one, the omniscient one, the all-seeing one. I have become tranquil and have exhausted all faults.', src: LV },

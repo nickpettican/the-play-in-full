@@ -30,7 +30,8 @@ export function spawnNPC(opts) {
   // named figures (disciples, bodhisattvas) carry a floating name
   if (N.name && !/^(A|An)\s/.test(N.name)) {
     N.label = makeNameLabel(N.name);
-    N.label.position.y = P.height + 0.28;
+    // the label rides inside the scaled group: offset in local, unscaled units
+    N.label.position.y = (P.height + 0.28) / (opts.scale || 1);
     P.group.add(N.label);
   }
   refreshMarker(N);
@@ -43,7 +44,7 @@ function refreshMarker(N) {
   const has = N.custom || N.qa.some(x => !N.asked.has(x.q));
   if (has && !N.marker) {
     N.marker = makeTalkMarker();
-    N.marker.position.y = N.person.height + 0.55;
+    N.marker.position.y = (N.person.height + 0.55) / (N.person.opts.scale || 1);
     N.group.add(N.marker);
   } else if (!has && N.marker) {
     N.group.remove(N.marker);
@@ -102,20 +103,22 @@ export function updateNPCs(dt, t) {
       const db = Math.hypot(g.position.x - N.bowNear.x, g.position.z - N.bowNear.z);
       if (N._bowCd <= 0 && db < 6.5) {
         N.person.bow();
+        // this reverence is to the Blessed One: turn to him, not the player
+        g.rotation.y = Math.atan2(N.bowNear.x - g.position.x, N.bowNear.z - g.position.z);
         N.target = null; N.waitT = 2.5; // stop for the bow
         N._bowCd = 16 + Math.random() * 10;
       }
     }
     // face player when close and idle (a translucent witness goes unnoticed)
     const dp = g.position.distanceTo(player.pos);
-    if (dp < 3.5 && N.behaviour !== 'sit' && !N.target && !player.translucent) {
+    if (dp < 3.5 && N.behaviour !== 'sit' && !N.target && !player.translucent && !(N.person.bowT > 0)) {
       const want = Math.atan2(player.pos.x - g.position.x, player.pos.z - g.position.z);
       let dr = want - g.rotation.y;
       while (dr > Math.PI) dr -= Math.PI * 2; while (dr < -Math.PI) dr += Math.PI * 2;
       g.rotation.y += dr * Math.min(1, dt * 4);
     }
     if (N.marker) {
-      N.marker.position.y = N.person.height + 0.55 + Math.sin(t * 2 + N.home.x) * 0.06;
+      N.marker.position.y = (N.person.height + 0.55 + Math.sin(t * 2 + N.home.x) * 0.06) / (N.person.opts.scale || 1);
       N.marker.material.opacity = (player.translucent && !N.seesWitness) ? 0 : dp < 12 ? 1 : Math.max(0, 1 - (dp - 12) / 8);
     }
     if (N.label) N.label.material.opacity = dp < 10 ? 0.95 : Math.max(0, 1 - (dp - 10) / 8);

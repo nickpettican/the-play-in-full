@@ -16,6 +16,8 @@ has it running.
 - `window.__player` — the player object (`pos`, `yaw`, `camYaw`, `camPitch`, `person`,
   `world`, `sitToggle`, …)
 - `window.__startAct(n)` — jump to an act
+- `http://localhost:8433/?act=N` — dev mode: skips the title screen (monk, English) and
+  starts at act N (localhost only)
 - `window.__snapDaylight(name)` — instant daylight preset ('night' to see the moon)
 
 ## Booting the game from a script

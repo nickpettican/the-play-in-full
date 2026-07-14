@@ -8,7 +8,7 @@ import { sfxStep, initAudio } from './audio.js';
 export const player = {
   pos: new THREE.Vector3(0, 0, 8),
   vel: new THREE.Vector3(),
-  yaw: 0, camYaw: 0, camPitch: 0.25,
+  yaw: 0, camYaw: 0, camPitch: 0.25, camDist: 5.2,
   grounded: true,
   sitting: false,
   bowlOut: false,
@@ -18,6 +18,7 @@ export const player = {
   onInteract: null,     // set by acts
   onBow: null,
   frozen: false,        // during cutscenes
+  camLook: null,        // Vector3: the camera pans to look here instead of the player
 };
 
 const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -47,9 +48,10 @@ export function createPlayerAvatar(kind /* 'monk' | 'nun' */) {
   scene.add(player.person.group);
 }
 
-// The player's witnessing forms: a god in Tushita, then a translucent monastic
-// (unseen by others) until the first teaching, then solid flesh again.
-export function setWitnessForm(mode /* 'heavenly' | 'translucent' | 'normal' */) {
+// The player's witnessing forms: a god in Tushita, then a translucent monastic —
+// unseen by others, until the first teaching, where the same faint form can be
+// addressed ('veiled'); afterwards, solid flesh again.
+export function setWitnessForm(mode /* 'heavenly' | 'translucent' | 'veiled' | 'normal' */) {
   player.bowlOut = false;
   if (mode === 'heavenly') {
     const nun = player.kind === 'nun';
@@ -65,14 +67,14 @@ export function setWitnessForm(mode /* 'heavenly' | 'translucent' | 'normal' */)
     scene.add(player.person.group);
   } else {
     createPlayerAvatar(player.kind);
-    if (mode === 'translucent') {
+    if (mode === 'translucent' || mode === 'veiled') {
       player.person.group.traverse(o => {
         if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.55; }
       });
     }
   }
   player.heavenly = mode === 'heavenly';
-  player.translucent = mode === 'translucent';
+  player.translucent = mode === 'translucent'; // 'veiled' looks the same but can be seen and addressed
 }
 export const setHeavenly = (on) => setWitnessForm(on ? 'heavenly' : 'normal');
 
@@ -152,7 +154,7 @@ if (IS_TOUCH) {
   }, { passive: true });
   const stick = document.getElementById('stick');
   const knob = document.getElementById('knob');
-  let stickId = null, lookId = null, lx = 0, ly = 0, lookMoved = 0;
+  let stickId = null, lookId = null, lx = 0, ly = 0, lookMoved = 0, pinchD = 0;
 
   stick.addEventListener('touchstart', e => {
     e.preventDefault(); stickId = e.changedTouches[0].identifier;
@@ -167,6 +169,16 @@ if (IS_TOUCH) {
     }
   });
   addEventListener('touchmove', e => {
+    // pinch zoom: two touches off the stick
+    const pts = [...e.touches].filter(t => t.identifier !== stickId);
+    if (pts.length >= 2) {
+      const d = Math.hypot(pts[0].clientX - pts[1].clientX, pts[0].clientY - pts[1].clientY);
+      if (pinchD) player.camDist = THREE.MathUtils.clamp(player.camDist - (d - pinchD) * 0.02, 2.2, 10);
+      pinchD = d;
+      lookMoved = 99; // a pinch is never a tap-to-interact
+      const lp = pts.find(t => t.identifier === lookId);
+      if (lp) { lx = lp.clientX; ly = lp.clientY; } // keep look anchor fresh so the camera doesn't jump after the pinch
+    } else pinchD = 0;
     for (const t of e.changedTouches) {
       if (t.identifier === stickId) {
         const r = stick.getBoundingClientRect();
@@ -175,6 +187,8 @@ if (IS_TOUCH) {
         stickMove.x = dx; stickMove.y = dy;
         knob.style.left = (35 + dx * 32) + 'px';
         knob.style.top = (35 + dy * 32) + 'px';
+      } else if (pinchD) {
+        // camera look is suspended while pinching
       } else if (t.identifier === lookId && !dialogue.open) {
         player.camYaw -= (t.clientX - lx) * 0.005;
         player.camPitch = THREE.MathUtils.clamp(player.camPitch + (t.clientY - ly) * 0.004, -0.55, 1.15);
@@ -191,6 +205,7 @@ if (IS_TOUCH) {
         lookId = null;
       }
     }
+    pinchD = 0;
   });
   document.getElementById('btnAct').addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); if (!dialogue.open) interactQueued = true; }, { passive: false });
   document.getElementById('btnJump').addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); keys.Space = true; setTimeout(() => keys.Space = false, 120); }, { passive: false });
@@ -202,6 +217,8 @@ if (IS_TOUCH) {
 // ---------- physics + camera ----------
 const _dir = new THREE.Vector3();
 const _camTarget = new THREE.Vector3();
+const _lookPt = new THREE.Vector3(), _lastLook = new THREE.Vector3();
+let _lookBlend = 0;
 const _ray = new THREE.Raycaster();
 let stepAcc = 0;
 
@@ -232,6 +249,7 @@ export function updatePlayer(dt, t) {
   const run = keys.ShiftLeft || keys.ShiftRight;
   const speed = (run ? player.speedRun : player.speedWalk) * Math.min(1, mLen);
 
+  const px0 = p.x, pz0 = p.z; // for walking into solid architecture
   if (mLen > 0.05 && !sitting) {
     // forward = away from the camera; right = strafe right of the view
     const a = player.camYaw + Math.PI + Math.atan2(-mx, -mz);
@@ -249,6 +267,10 @@ export function updatePlayer(dt, t) {
   // jump + gravity (rivers are wadeable: waist-deep at most)
   let groundY = W.groundHeight(p.x, p.z);
   if (W.waterLevel > -900) groundY = Math.max(groundY, W.waterLevel - 0.55);
+  // solid blocks: stand on any top within a step's reach below/above the feet
+  if (W.blocks) for (const b of W.blocks)
+    if (p.x >= b.x0 && p.x <= b.x1 && p.z >= b.z0 && p.z <= b.z1
+        && b.y1 <= p.y + 0.55 && b.y1 > groundY) groundY = b.y1;
   if (keys.Space && player.grounded && !sitting && !dialogue.open && !player.frozen) {
     player.vel.y = 5.4; player.grounded = false;
   }
@@ -263,11 +285,20 @@ export function updatePlayer(dt, t) {
   for (const c of W.colliders) {
     const dx = p.x - c.x, dz = p.z - c.z;
     if (c.h !== undefined && p.y > c.h) continue;
+    if (c.b !== undefined && p.y < c.b) continue;
     const d2 = dx * dx + dz * dz, rr = c.r + 0.32;
     if (d2 < rr * rr && d2 > 1e-6) {
       const d = Math.sqrt(d2);
       p.x = c.x + dx / d * rr; p.z = c.z + dz / d * rr;
     }
+  }
+  // solid blocks act as walls when their top is above step reach; a player who
+  // somehow starts inside one (teleport, act spawn) may walk free rather than freeze
+  if (W.blocks) for (const b of W.blocks) {
+    const x0 = b.x0 - 0.24, x1 = b.x1 + 0.24, z0 = b.z0 - 0.24, z1 = b.z1 + 0.24;
+    if (p.x > x0 && p.x < x1 && p.z > z0 && p.z < z1
+        && b.y1 > p.y + 0.55 && b.y0 < p.y + 1.5
+        && !(px0 > x0 && px0 < x1 && pz0 > z0 && pz0 < z1)) { p.x = px0; p.z = pz0; break; }
   }
   // world wrap (seamless: terrain noise is periodic with W.size)
   const HS = W.size / 2;
@@ -297,7 +328,7 @@ export function updatePlayer(dt, t) {
   }
 
   // ---------- camera ----------
-  const dist = 5.2, headY = 1.55;
+  const dist = player.camDist, headY = 1.55;
   _camTarget.set(p.x, p.y + headY, p.z);
   const cy = player.camYaw, cp = player.camPitch;
   const off = new THREE.Vector3(
@@ -321,5 +352,10 @@ export function updatePlayer(dt, t) {
   if (camPos.y < terrY) camPos.y = terrY;
 
   camera.position.lerp(camPos, Math.min(1, dt * 12));
-  camera.lookAt(_camTarget);
+  // scripted pan: ease the gaze toward player.camLook and back again when cleared
+  if (player.camLook) _lastLook.copy(player.camLook);
+  _lookBlend = THREE.MathUtils.clamp(_lookBlend + (player.camLook ? dt : -dt) * 0.7, 0, 1);
+  _lookPt.copy(_camTarget);
+  if (_lookBlend > 0) _lookPt.lerp(_lastLook, _lookBlend * _lookBlend * (3 - 2 * _lookBlend));
+  camera.lookAt(_lookPt);
 }

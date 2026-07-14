@@ -40,7 +40,8 @@ function typeIn(text) {
 }
 
 function showPage(page) {
-  whoEl.textContent = page.who || 'Narrator';
+  // the Lalitavistara is recited by Ānanda ("Thus did I hear…")
+  whoEl.textContent = page.who || (page.src?.includes('Lalitavistara') ? 'Ānanda' : 'Narrator');
   typeIn(page.q);
   srcEl.textContent = page.src ? '— ' + page.src : '';
   srcEl.style.display = page.src ? '' : 'none';
@@ -50,6 +51,7 @@ function showPage(page) {
   nextEl.textContent = queue.length ? T('cont') : T('close');
   shownAt = performance.now();
   minReadMs = minRead(page.q);
+  page.onShow?.(); // lets acts stage things timed to a specific page
 }
 
 // pages: [{q, src?, who?}], opts: {focus: bool} — mindfulness tracked unless focus: false
