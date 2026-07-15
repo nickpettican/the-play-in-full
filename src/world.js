@@ -911,9 +911,11 @@ async function forest(W, treeNames, count, opts = {}) {
       W.group.add(t);
       W.addCollider(x, z, 0.25 * s);
     } else {
-      const src = srcs[(Math.random() * srcs.length) | 0];
+      const pick = (Math.random() * srcs.length) | 0;
       const h = (opts.treeH || 5) * (0.75 + Math.random() * 0.7);
-      placeModel(W, src, h, x, z, Math.random() * Math.PI * 2, 0.4, { remap: pastelRemap });
+      // willows model their roots; bury them below the turf like the hero trees
+      const sink = treeNames[pick] === 'willow' ? -h * 0.11 : 0;
+      placeModel(W, srcs[pick], h, x, z, Math.random() * Math.PI * 2, 0.4, { sink, remap: pastelRemap });
     }
   }
 }
@@ -1256,8 +1258,8 @@ export async function buildKushinagar() {
   W.buildTerrain();
   const willow = await loadModel('willow');
   // twin sala trees, roots buried
-  placeModel(W, willow, 15, -2.6, -6, 0.2, 1.5, { sink: -3, remap: pastelRemap });
-  placeModel(W, willow, 15, 2.6, -6, 2.4, 1.5, { sink: -3, remap: pastelRemap });
+  placeModel(W, willow, 18, -3.9, -6, 0.2, 1.5, { sink: -3, remap: pastelRemap });
+  placeModel(W, willow, 17, 3.9, -6, 2.4, 1.5, { sink: -3, remap: pastelRemap });
   W.spots.couch = new THREE.Vector3(0, 0, -6);
   await forest(W, ['plain-tree', 'willow'], 70, { exclude: [{ x: 0, z: -6, r: 14 }], treeH: 9 });
   W.scatterGrass(2200, [{ x: 0, z: -5, r: 9 }]);

@@ -4,10 +4,10 @@ import { scene, loadModel, instantiate, setDaylight, snapDaylight } from './engi
 import { switchWorld, world, lotus, scatterGods } from './world.js';
 import { player, setWitnessForm } from './player.js';
 import { spawnNPC, clearNPCs, npcs, nearestNPC, talkTo, resetQuestions, allQuestionsExhausted } from './npc.js';
-import { makePerson, makeBuddha, makeBowl, makeHalo, makeTalkMarker, makeHorse, makeElephant, makeCarriage, makeDeer } from './characters.js';
+import { makePerson, makeBuddha, makeBowl, makeHalo, makeTalkMarker, makeNameLabel, makeHorse, makeElephant, makeCarriage, makeDeer } from './characters.js';
 import { showNarration, showChoices, showActCard, fade, dialogue } from './dialogue.js';
 import { NARRATION, actTitle, QA_PALI, QA_MAHAYANA, QA_DEVA, QA_ASCETIC, QA_IMPERMANENCE, BODHISATTVAS, DISCIPLES, script } from './content.js';
-import { T } from './i18n.js';
+import { T, tr } from './i18n.js';
 import { setAmbient, sfxBell, sfxTwinkle, sfxFile, sfxDrum, sfxWhoosh, sfxSparkle, sfxHorse, sfxChime } from './audio.js';
 import { petals, motes, burst, radiance, fireflies, aura, clearParticles } from './particles.js';
 
@@ -16,6 +16,7 @@ export const game = { act: -1, updaters: [], props: [], interactables: [] };
 // ---------- helpers ----------
 function addProp(obj) { scene.add(obj); game.props.push(obj); return obj; }
 function clearStage() {
+  cancelNudge();
   clearNPCs(); clearParticles();
   for (const p of game.props) scene.remove(p);
   game.props.length = 0;
@@ -24,11 +25,32 @@ function clearStage() {
 }
 function onUpdate(fn) { game.updaters.push(fn); }
 
+// a gentle prompt for players who miss the story bubble: shows once, ~30s after
+// the marker appears, and cancels the moment the player interacts with it
+let nudgeTimer = 0, nudgeHide = 0;
+function cancelNudge() {
+  clearTimeout(nudgeTimer); clearTimeout(nudgeHide);
+  document.getElementById('nudge').classList.remove('show');
+}
+function armNudge() {
+  cancelNudge();
+  nudgeTimer = setTimeout(() => {
+    const el = document.getElementById('nudge');
+    el.textContent = T(matchMedia('(pointer: coarse)').matches ? 'nudgeTouch' : 'nudge');
+    el.classList.add('show');
+    nudgeHide = setTimeout(() => el.classList.remove('show'), 7000);
+  }, 30000);
+}
+
 // interactable: floating marker at pos; action() when player clicks nearby
-function addInteractable({ pos, r = 3, marker = true, markerY = 2.4, markerX, action, host = null }) {
-  const it = { pos, r, action, alive: true };
+function addInteractable({ pos, r = 3, marker = true, markerY = 2.4, markerX, action, host = null, nudge = false }) {
+  const it = {
+    pos, r, alive: true,
+    action(x) { if (nudge) cancelNudge(); action.call(this, x); },
+  };
+  if (nudge) armNudge();
   if (marker) {
-    it.sprite = makeTalkMarker();
+    it.sprite = makeTalkMarker('gold'); // the story bubble stands out from NPC chatter
     const holder = host || scene;
     it.sprite.position.copy(host ? new THREE.Vector3(markerX ?? 0, markerY, 0) : pos.clone().add(new THREE.Vector3(0, markerY, 0)));
     holder.add(it.sprite);
@@ -36,6 +58,7 @@ function addInteractable({ pos, r = 3, marker = true, markerY = 2.4, markerX, ac
   }
   it.remove = () => {
     it.alive = false;
+    if (nudge) cancelNudge();
     if (it.sprite) (host || scene).remove(it.sprite);
     const i = game.interactables.indexOf(it);
     if (i >= 0) game.interactables.splice(i, 1);
@@ -133,8 +156,16 @@ async function placeBuddha(W, pos, { ry = 0 } = {}) {
   B.setAnim('sit');
   B.group.position.set(pos.x, W.groundHeight(pos.x, pos.z) + (W.spots.buddhaLift || 0), pos.z);
   B.group.rotation.y = ry;
+  // named like the disciples around him, fading with distance the same way
+  const label = makeNameLabel(tr('The Blessed One'));
+  label.position.y = (B.height + 0.28) / (B.opts.scale || 1);
+  B.group.add(label);
   addProp(B.group);
-  onUpdate((dt, t) => B.update(dt, t));
+  onUpdate((dt, t) => {
+    B.update(dt, t);
+    const dp = B.group.position.distanceTo(player.pos);
+    label.material.opacity = dp < 10 ? 0.95 : Math.max(0, 1 - (dp - 10) / 8);
+  });
   return B;
 }
 
@@ -262,7 +293,7 @@ ACTS[0] = async () => {
   spawnDisciples(W, W.spots.buddha);
   petals(W.spots.buddha.clone().setY(2), 20, 50, [[1, 1, 1], [1, .85, .9]]);
   addInteractable({
-    pos: W.spots.buddha.clone(), r: 3.6, markerY: 2.8,
+    pos: W.spots.buddha.clone(), r: 3.6, markerY: 3, nudge: true,
     action(it) {
       showChoices('The Blessed One', script('buddhaPrompt').q, [{
         label: script('buddhaAsk'),
@@ -308,10 +339,17 @@ ACTS[1] = async () => {
   const bodhi = makePerson({ kind: 'deva', robe: 0xfff6e0, skin: 0xe8c9a0, ornate: true, halo: 'gold', scale: 2.0 });
   bodhi.group.position.copy(bPos);
   bodhi.group.rotation.y = 0; // facing the centre of the pillar circle
+  const bLabel = makeNameLabel(tr('The Bodhisattva'));
+  bLabel.position.y = (bodhi.height + 0.28) / 2.0;
+  bodhi.group.add(bLabel);
   addProp(bodhi.group);
-  onUpdate((dt, t) => bodhi.update(dt, t));
+  onUpdate((dt, t) => {
+    bodhi.update(dt, t);
+    const dp = bodhi.group.position.distanceTo(player.pos);
+    bLabel.material.opacity = dp < 10 ? 0.95 : Math.max(0, 1 - (dp - 10) / 8);
+  });
   addInteractable({
-    pos: bPos, r: 4, markerY: 4.2,
+    pos: bPos, r: 4, markerY: 4.2, nudge: true,
     action(it) {
       it.remove();
       // hearing his farewell, the gods gather around him, bow, and sit
@@ -734,6 +772,7 @@ ACTS[6] = async () => {
   horse.group.rotation.y = 0;
   addProp(horse.group);
   const sid = makePerson({ kind: 'prince', robe: 0xe8b84a, skin: 0xd8a877, halo: 'gold' });
+  sid.setSadEyes();
   sid.setAnim('sit');
   carriage.group.add(sid.group);
   sid.group.position.set(0, 0.95, -0.35); // seated on the cushion
@@ -1540,7 +1579,7 @@ ACTS[11] = async () => {
   resetQuestions();
   petals(W.spots.buddha.clone().setY(2), 20, 60, [[1, 1, 1], [1, .85, .9]]);
   addInteractable({
-    pos: W.spots.buddha.clone(), r: 3.6, markerY: 2.8,
+    pos: W.spots.buddha.clone(), r: 3.6, markerY: 2.8, nudge: true,
     action(it) {
       it.remove();
       showNarration(NARRATION.act11.map((x, i) => i < 2 ? { ...x, who: 'The Blessed One' } : x),
@@ -1567,15 +1606,16 @@ ACTS[12] = async () => {
   onUpdate((dt, t) => lying.update(dt, t));
   spawnSangha(W, c, { monks: 30, withQA: false, qaBank: QA_IMPERMANENCE });
   spawnDisciples(W, c);
-  // everyone faces the couch, seated
+  // everyone faces the couch, seated, eyes turned down in grief
   for (const N of npcs) {
     N.behaviour = 'sit';
     N.person.setAnim('sit');
+    N.person.setSadEyes();
     N.group.rotation.y = Math.atan2(c.x - N.group.position.x, c.z - N.group.position.z);
   }
   petals(c.clone().setY(4), 16, 60, [[1, 1, 1], [.95, .9, .8]]);
   addInteractable({
-    pos: c.clone(), r: 4, markerY: 2.4,
+    pos: c.clone(), r: 4, markerY: 2.4, nudge: true,
     action(it) {
       it.remove();
       showNarration(NARRATION.act12.map(x => ({ ...x, who: 'The Blessed One' })), async () => {

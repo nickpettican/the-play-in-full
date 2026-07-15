@@ -4,7 +4,7 @@ import { scene } from './engine.js';
 import { makePerson, makeTalkMarker, makeNameLabel } from './characters.js';
 import { showChoices, showAnswer, closeBubble } from './dialogue.js';
 import { player } from './player.js';
-import { T, LANG } from './i18n.js';
+import { T, LANG, tr } from './i18n.js';
 
 export const npcs = [];
 
@@ -29,7 +29,7 @@ export function spawnNPC(opts) {
   if (N.behaviour === 'sit') P.setAnim('sit');
   // named figures (disciples, bodhisattvas) carry a floating name
   if (N.name && !/^(A|An)\s/.test(N.name)) {
-    N.label = makeNameLabel(N.name);
+    N.label = makeNameLabel(tr(N.name));
     // the label rides inside the scaled group: offset in local, unscaled units
     N.label.position.y = (P.height + 0.28) / (opts.scale || 1);
     P.group.add(N.label);

@@ -78,12 +78,14 @@ export function makeHalo(kind = 'gold', size = 0.5) {
 }
 
 // ---------- speech-bubble marker ----------
-let bubbleTex = null;
-export function makeTalkMarker() {
-  if (!bubbleTex) {
+// kind 'plain': cream, for NPC chatter. kind 'gold': larger and gold, marking
+// the one bubble that moves the story forward.
+const bubbleTex = {};
+export function makeTalkMarker(kind = 'plain') {
+  if (!bubbleTex[kind]) {
     const c = document.createElement('canvas'); c.width = c.height = 64;
     const g = c.getContext('2d');
-    g.fillStyle = 'rgba(250,240,215,0.95)';
+    g.fillStyle = kind === 'gold' ? 'rgba(228,158,32,0.98)' : 'rgba(250,240,215,0.95)';
     g.beginPath();
     g.moveTo(14, 44); g.lineTo(24, 44); g.lineTo(20, 56); g.lineTo(32, 44);
     g.lineTo(50, 44);
@@ -92,12 +94,13 @@ export function makeTalkMarker() {
     g.quadraticCurveTo(6, 10, 6, 18); g.lineTo(6, 36);
     g.quadraticCurveTo(6, 44, 14, 44);
     g.fill();
-    g.fillStyle = 'rgba(90,60,20,0.9)';
+    g.fillStyle = kind === 'gold' ? 'rgba(74,42,8,0.95)' : 'rgba(90,60,20,0.9)';
     for (const x of [20, 32, 44]) { g.beginPath(); g.arc(x, 27, 3.2, 0, Math.PI * 2); g.fill(); }
-    bubbleTex = new THREE.CanvasTexture(c);
+    bubbleTex[kind] = new THREE.CanvasTexture(c);
+    bubbleTex[kind].colorSpace = THREE.SRGBColorSpace; // keep the gold from washing out
   }
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: bubbleTex, transparent: true, depthWrite: false }));
-  sp.scale.setScalar(0.42);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: bubbleTex[kind], transparent: true, depthWrite: false }));
+  sp.scale.setScalar(kind === 'gold' ? 0.62 : 0.42);
   sp.raycast = () => {};
   return sp;
 }
@@ -253,6 +256,8 @@ export function makePerson(opts = {}) {
     for (const c of eyesShut) c.visible = shape === 'shut';
     for (const sl of eyesSlit) sl.visible = shape === 'slit';
   };
+  // ∪ instead of ∩ (as in the austerity years): grief, e.g. the mourners at Kuśinagara
+  const setSadEyes = () => { for (const c of eyesShut) c.rotation.z = Math.PI; };
 
   // hair
   if (hair === 'long' || hair === 'bun') {
@@ -376,6 +381,7 @@ export function makePerson(opts = {}) {
     group: root, body, headG, armL, armR, elbL, elbR, legL, legR, skirt, drape, drapeSit, tK,
     anim: null, phase: Math.random() * 10, speed: 0, // null so the first setAnim('idle') runs in full
     bowT: 0, bowHold: false, haloSprite, height: (standY + (0.82 + 0.28 * chibi) * tK + 0.18) * scale, opts, handsJoined,
+    setSadEyes,
   };
 
   const restArms = () => {

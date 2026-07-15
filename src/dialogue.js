@@ -1,6 +1,6 @@
 // Bubble UI, choice menus, mindfulness/focus meter.
 import { sfxBlip, sfxChime, duckAmbient } from './audio.js';
-import { T } from './i18n.js';
+import { T, tr } from './i18n.js';
 
 const bubble = document.getElementById('bubble');
 const whoEl = bubble.querySelector('.who');
@@ -41,8 +41,8 @@ function typeIn(text) {
 
 function showPage(page) {
   // the Lalitavistara is recited by Ānanda ("Thus did I hear…")
-  whoEl.textContent = page.who || (page.src?.includes('Lalitavistara') ? 'Ānanda' : 'Narrator');
-  typeIn(page.q);
+  whoEl.textContent = tr(page.who || (page.src?.includes('Lalitavistara') ? 'Ānanda' : 'Narrator'));
+  typeIn(tr(page.q)); // scripture is never in the dictionary, so it passes through in English
   srcEl.textContent = page.src ? '— ' + page.src : '';
   srcEl.style.display = page.src ? '' : 'none';
   choicesEl.innerHTML = '';
@@ -117,8 +117,8 @@ export function showChoices(who, prompt, choices, onClose) {
   onDone = onClose || null;
   bubble.style.display = 'block';
   document.exitPointerLock?.();
-  whoEl.textContent = who;
-  typeIn(prompt);
+  whoEl.textContent = tr(who);
+  typeIn(tr(prompt));
   srcEl.style.display = 'none';
   nextEl.style.display = 'none';
   choicesEl.innerHTML = '';
@@ -127,7 +127,7 @@ export function showChoices(who, prompt, choices, onClose) {
   for (const c of choices) {
     const d = document.createElement('div');
     d.className = 'choice';
-    d.textContent = c.label;
+    d.textContent = tr(c.label);
     d.onclick = (e) => { e.stopPropagation(); sfxBlip(); c.action(); };
     choicesEl.appendChild(d);
     choiceEls.push(d);

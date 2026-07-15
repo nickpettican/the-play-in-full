@@ -1,5 +1,7 @@
 // Interface languages. Scripture quotes stay in English (the 84000 translation):
 // translating them ourselves would break quote fidelity, so only UI text localises.
+import { ES_CONTENT } from './i18n-es.js';
+
 export const STR = {
   en: {
     title: 'The Play in Full',
@@ -17,6 +19,8 @@ export const STR = {
     supportUrl: 'https://offeringbowl.org',
     regard: 'regards you kindly.',
     scriptureNote: '',
+    nudge: 'Walk up to the golden speech bubble and press E to continue the story',
+    nudgeTouch: 'Walk up to the golden speech bubble and tap 💬 to continue the story',
   },
   es: {
     title: 'La Obra Completa',
@@ -34,9 +38,17 @@ export const STR = {
     supportUrl: 'https://cuencodeofrendas.org',
     regard: 'Te contempla con bondad.',
     scriptureNote: 'Las citas de las escrituras se muestran en inglés (traducción de 84000).',
+    nudge: '',        // left for the translation agent
+    nudgeTouch: '',   // left for the translation agent
   },
 };
 
 export let LANG = localStorage.getItem('pif-lang') || 'en';
 export function setLang(l) { LANG = STR[l] ? l : 'en'; localStorage.setItem('pif-lang', LANG); }
-export const T = (k) => STR[LANG][k] ?? STR.en[k];
+// empty strings fall back to English, so untranslated entries never blank the UI
+export const T = (k) => STR[LANG][k] || STR.en[k];
+
+// Content translation by English key: names, 'who' labels, player questions and
+// other non-scripture lines. Verbatim scripture never goes through here with a
+// translation (see i18n-es.js header); an empty or missing entry shows English.
+export const tr = (s) => (LANG === 'es' && s && ES_CONTENT[s]) || s;
