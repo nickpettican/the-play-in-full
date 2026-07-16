@@ -225,7 +225,7 @@ function palaceGuards(W, { asleep = false } = {}) {
     const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.85, 0.015),
       new THREE.MeshLambertMaterial({ color: 0xc9ced4, flatShading: true }));
     g.elbL.add(blade);
-    const x = s * (asleep ? 3.0 : 4.2), z = asleep ? -34.6 : -36;
+    const x = s * (asleep ? 3.0 : 4.75), z = asleep ? -34.6 : -35;
     g.group.position.set(x, W.groundHeight(x, z), z);
     if (asleep) {
       blade.position.set(0, -0.72, 0.04); // the sword lies loose by the sleeping hand
@@ -515,7 +515,7 @@ ACTS[3] = async () => {
         petals(mayaPos, 14, 160);
         motes(mayaPos, 12, 120);
         setDaylight('radiance', 4);
-        sfxFile('assets/mp3/birth-reached.mp3');
+        sfxFile('assets/mp3/baby-giggle.mp3');
         // everyone bows still at the birth; Māyā lowers her arm from the branch
         for (const a of attendants) a.person.bowHold = true;
         maya.armR.rotation.z = 0.08;
@@ -541,8 +541,7 @@ ACTS[3] = async () => {
               if (steps === 7) {
                 baby.setAnim('idle');
                 baby.lockArms = true; // hold the raised arm against the idle sway
-                baby.armR.rotation.set(0, 0, 0);
-                baby.elbR.rotation.set(0, 0, 2.4); // right arm lifted to the sky
+                baby.armL.rotation.set(0, 0, 2.4); // right arm lifted to the sky
                 setTimeout(() => {
                   showNarration(NARRATION.act3.slice(2).map((x, i) =>
                     i === 2 ? { ...x, who: 'The newborn' } : i === 3 ? { ...x, who: 'The sage Asita' } : x),
