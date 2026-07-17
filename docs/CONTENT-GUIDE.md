@@ -11,6 +11,12 @@ How to add dialogue, quotes, and characters to the game. For agents and humans a
    `raw/extracted/play-in-full-lalitavistara-toh95.md` (84000, Toh 95). Trim only folio markers
    like `[F.123.b]` and footnote numbers.
 3. Keep each bubble 1–4 sentences. Long teachings are split across several pages (array entries).
+4. The raw Lalitavistara file is extracted from `raw/epubs/…toh95.epub` by
+   `tools/extract_source.py` and includes verses and `[14.­10]`-style milestone anchors
+   (chapter.passage, matching the 84000 reading room — cite these, they survive
+   re-extraction). When quoting, strip milestones, folio markers (`[F.96.b]`), bare
+   bracketed numbers, and trailing footnote digits. Planned scenes with verified anchors
+   live in `docs/content-expansion-spec.md`.
 
 ## Where everything lives
 

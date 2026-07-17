@@ -34,6 +34,12 @@ for (const s of ['current', 'cute', 'cuter']) {
   b.onclick = () => location.search = '?set=' + s;
   tabs.appendChild(b);
 }
+{
+  const b = document.createElement('button');
+  b.textContent = 'cloth';
+  b.onclick = () => location.href = 'clothtest.html';
+  tabs.appendChild(b);
+}
 
 // Every design currently used in the game (deduped from acts.js / player.js / npc.js).
 // p: makePerson opts, b: makeBuddha opts, make: anything else. mona: gets the outer robe.

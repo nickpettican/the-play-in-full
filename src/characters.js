@@ -1,5 +1,6 @@
 // Procedural characters: monastics, devas, laypeople, demons, animals. All primitives.
 import * as THREE from 'three';
+import { dressCloth } from './cloth.js';
 
 // shared geometries
 const G = {
@@ -73,7 +74,7 @@ export function makeHalo(kind = 'gold', size = 0.5) {
     opacity: kind === 'gold' ? 0.95 : 0.6,
   }));
   sp.scale.setScalar(size);
-  sp.raycast = () => {}; // decorative: never blocks the camera ray
+  sp.raycast = () => { }; // decorative: never blocks the camera ray
   return sp;
 }
 
@@ -101,7 +102,7 @@ export function makeTalkMarker(kind = 'plain') {
   }
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: bubbleTex[kind], transparent: true, depthWrite: false }));
   sp.scale.setScalar(kind === 'gold' ? 0.62 : 0.42);
-  sp.raycast = () => {};
+  sp.raycast = () => { };
   return sp;
 }
 
@@ -117,7 +118,7 @@ export function makeNameLabel(text) {
   const t = new THREE.CanvasTexture(c);
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false }));
   sp.scale.set(2.2, 0.34, 1);
-  sp.raycast = () => {};
+  sp.raycast = () => { };
   return sp;
 }
 
@@ -186,6 +187,7 @@ export function makePerson(opts = {}) {
     kind = 'monk', robe = 0x9a4318, outerRobeColour = 0xcc7722, skin = 0xc8996c,
     halo = null, scale = 1, ornate = false, skinny = false, handsJoined = false,
     chibi = 0.2, outerRobe = false,
+    cloth = true, // Verlet cloth dress (src/cloth.js); false = the old rigid design
   } = opts;
   const legS = 1 - 0.55 * chibi;                // leg shortening
   const standY = 0.85 - 0.75 * (1 - legS);      // hip height standing
@@ -194,11 +196,24 @@ export function makePerson(opts = {}) {
   const tK = 1 - 0.35 * chibi;                  // torso squash: neck/head/arms ride down with it
   const female = kind === 'nun' || kind === 'laywoman' || kind === 'devi';
   const monastic = kind === 'monk' || kind === 'nun';
+  const lay = !monastic && !skinny && !['ascetic', 'demon', 'buddha'].includes(kind);
+  const dress = cloth && kind !== 'demon'; // the cloth redesign is the default game dress
+  // dress variants (clothtest.html): bareTorso: skin torso; armsSkin: whole arms skin;
+  // foreArmSkin: skin below the elbow; legsSkin: skin legs; breasts: two chest mounds.
+  // The redesign defaults: women bare-bellied in a tube top, royals (ornate) keep
+  // dressed upper arms, villagers bare arms; nuns get the bust under the robe.
+  const bareTorso = opts.bareTorso ?? (dress && lay && female);
+  const foreArmSkin = opts.foreArmSkin ?? (dress && lay && (female || ornate));
+  const armsSkin = opts.armsSkin ?? (dress && lay && !female && !ornate);
+  const legsSkin = opts.legsSkin ?? (dress && lay);
+  const breasts = opts.breasts ?? (dress && female && !skinny);
   let hair = opts.hair;
   if (hair === undefined) {
     if (monastic || kind === 'ascetic' || kind === 'demon') hair = 'bald';
     else hair = female ? 'long' : 'bun';
   }
+  // cloth hair replaces the rigid sheets: a wrapping cap (+ the man-bun for men)
+  if (dress && lay && (hair === 'long' || hair === 'bun')) hair = female ? 'cap' : 'capbun';
   const hairColor = opts.hairColor ?? 0x241a10;
   const robeM = mat(robe);
   const skinM = mat(skin);
@@ -209,21 +224,23 @@ export function makePerson(opts = {}) {
   root.add(body);
 
   // torso — flattened front-to-back: wide at the shoulders, shallow chest and back
-  const torso = new THREE.Mesh(skinny ? G.torsoSkinny : G.torso, skinny ? skinM : robeM);
+  const torso = new THREE.Mesh(skinny ? G.torsoSkinny : G.torso,
+    (skinny || bareTorso) ? skinM : robeM);
   torso.position.y = 0.21 * tK;
   torso.scale.z = 0.58;
   torso.scale.y = tK;
-  if (female && !skinny) torso.scale.x = 0.92;
+  if (female && !skinny) torso.scale.x = 0.76;
   body.add(torso);
-  // neck
+  // neck — the skinny torso is 0.15 shorter, so neck and head ride 0.07 lower with it
+  const nDrop = skinny ? 0.07 : 0;
   const neck = new THREE.Mesh(G.neck, skinM);
-  neck.position.y = 0.59 * tK;
+  neck.position.y = (0.59 - nDrop) * tK;
   neck.scale.y = tK;
   body.add(neck);
 
   // head
   const headG = new THREE.Group();
-  headG.position.y = (0.7 - 0.05 * chibi) * tK;
+  headG.position.y = (0.7 - 0.05 * chibi - nDrop) * tK;
   headG.scale.setScalar(1 + 0.6 * chibi);   // chibi: a big head on a small frame
   const head = new THREE.Mesh(G.head, skinM);
   head.position.y = 0.09;
@@ -260,16 +277,23 @@ export function makePerson(opts = {}) {
   const setSadEyes = () => { for (const c of eyesShut) c.rotation.z = Math.PI; };
 
   // hair
-  if (hair === 'long' || hair === 'bun') {
+  const capOnly = hair === 'cap' || hair === 'capbun'; // cloth-sim hair replaces the back sheet
+  if (hair === 'long' || hair === 'bun' || capOnly) {
     const cap = new THREE.Mesh(G.hairCap, hairM);
     cap.position.y = 0.15; cap.scale.set(1, 1, 1);
+    if (capOnly) { // tipped back: more forehead in front, covers the nape behind
+      cap.rotation.x = -0.3;
+      cap.position.z = -0.015;
+    }
     headG.add(cap);
-    const back = new THREE.Mesh(female ? G.hairBackF : G.hairBack, hairM); // long hair down the back
-    back.position.set(0, female ? -0.13 : -0.02, -0.1); // dropped so the crown stays put
-    if (female) back.scale.set(1.15, 1, 0.8); // a flat sheet of hair lying against the back
-    back.rotation.x = 0.15;
-    headG.add(back);
-    if (hair === 'bun') {
+    if (!capOnly) {
+      const back = new THREE.Mesh(female ? G.hairBackF : G.hairBack, hairM); // long hair down the back
+      back.position.set(0, female ? -0.13 : -0.02, -0.1); // dropped so the crown stays put
+      if (female) back.scale.set(1.15, 1, 0.8); // a flat sheet of hair lying against the back
+      back.rotation.x = 0.15;
+      headG.add(back);
+    }
+    if (hair === 'bun' || hair === 'capbun') {
       const bun = new THREE.Mesh(G.bun, hairM);       // man-bun at the back of the head
       bun.position.set(0, 0.16, -0.14);
       headG.add(bun);
@@ -277,9 +301,11 @@ export function makePerson(opts = {}) {
   } else if (hair === 'ushnisha') {
     const cap = new THREE.Mesh(G.hairCap, hairM);     // hugging the skull, no hat-brim rim
     cap.position.y = 0.16; cap.scale.set(0.92, 0.82, 0.92);
+    cap.rotation.x = -0.3;
+    // cap.position.z = -0.015;
     headG.add(cap);
     const u = new THREE.Mesh(G.ushnisha, hairM);      // crown protuberance on top
-    u.position.y = 0.29;
+    u.position.y = 0.25;
     headG.add(u);
   }
   if (kind === 'demon') {
@@ -299,10 +325,31 @@ export function makePerson(opts = {}) {
   legL.scale.y = legR.scale.y = legS;
   if (female && !skinny) { legL.rotation.z = 0.037; legR.rotation.z = -0.037; }
   const legGeo = skinny ? G.legThin : G.leg;
-  const legMat = (monastic || skinny || kind === 'ascetic' || kind === 'demon') ? skinM : robeM;
+  const legMat = (monastic || skinny || kind === 'ascetic' || kind === 'demon' || legsSkin)
+    ? skinM : robeM;
   const mkLeg = () => { const m = new THREE.Mesh(legGeo, legMat); m.position.y = -0.48; return m; };
   legL.add(mkLeg()); legR.add(mkLeg());
   root.add(legL, legR);
+  let setFemTorso = null;
+  if (breasts && female) {
+    // new female proportions: legs 5% longer, torso shortened from the bottom so it
+    // starts at the leg tops — overall height unchanged (gated on the new dress design)
+    const legK = 1.05;
+    const lift = 0.85 * legS * (legK - 1);            // keep the feet on the ground
+    legL.scale.y = legR.scale.y = legS * legK;
+    legL.position.y = legR.position.y = standY + 0.05 + lift;
+    const top = 0.56 * tK;                            // torso top (shoulders) stays put
+    const legTop = 0.05 + lift - 0.11 * legS * legK;  // body space
+    // seated, the raised torso bottom would leave a gap above the sit base — extend
+    // the torso back down to the old bottom (sitY was tuned for it); shoulders stay put
+    const drop = legTop + 0.14 * tK;
+    setFemTorso = (sit) => {
+      const h = top - legTop + (sit ? drop : 0);
+      torso.scale.y = h / 0.7;
+      torso.position.y = top - h / 2;
+    };
+    setFemTorso(false);
+  }
   // women wear a short flared layer over the main skirt, which begins where the layer ends
   const skirt = new THREE.Mesh(skinny ? G.wrap : (female ? G.skirtUnder : G.skirt), robeM);
   skirt.position.y = (skinny ? 0.86 : female ? 0.25 : 0.45) * yK; // female: top just under the layer's hem
@@ -321,12 +368,12 @@ export function makePerson(opts = {}) {
   // arms — jointed at the elbow; monastics' right arm is bare (robe over the left shoulder only)
   const bareArms = skinny || kind === 'ascetic' || kind === 'demon';
   const armL = new THREE.Group(), armR = new THREE.Group();
-  const armX = skinny ? 0.21 : 0.255; // thinner torso, so the shoulders sit closer in
+  const armX = skinny || female ? 0.21 : 0.255; // thinner torso, so the shoulders sit closer in
   armL.position.set(-armX, 0.52 * tK, 0); armR.position.set(armX, 0.52 * tK, 0);
   let elbL = null, elbR = null;
   for (const [g, s] of [[armL, -1], [armR, 1]]) {
     // the -x arm is the character's anatomical right when facing forward
-    const bare = bareArms || (monastic && s === -1);
+    const bare = bareArms || armsSkin || (monastic && s === -1);
     const sh = new THREE.Mesh(G.shoulder, bare ? skinM : robeM);
     if (skinny) sh.scale.setScalar(0.62); // bony shoulder
     g.add(sh);
@@ -334,7 +381,8 @@ export function makePerson(opts = {}) {
     up.position.y = -0.18; g.add(up);
     const elb = new THREE.Group();
     elb.position.y = -0.37;
-    const lo = new THREE.Mesh(skinny ? G.armLoThin : G.armLo, bare ? skinM : robeM);
+    const lo = new THREE.Mesh(skinny ? G.armLoThin : G.armLo,
+      (bare || foreArmSkin) ? skinM : robeM);
     lo.position.y = -0.16; elb.add(lo);
     const h = new THREE.Mesh(G.hand, skinM); h.position.y = -0.33; elb.add(h);
     g.add(elb);
@@ -346,8 +394,21 @@ export function makePerson(opts = {}) {
   }
   body.add(armL, armR);
 
+  if (breasts) {
+    // two chest mounds; the cloth-sim tube top drapes over matching colliders.
+    // material matches the torso: skin when bare, robe cloth when dressed (nuns)
+    const breastM = (skinny || bareTorso) ? skinM : robeM;
+    const bG = new THREE.SphereGeometry(0.085, 10, 8);
+    for (const s of [-1, 1]) {
+      const bm = new THREE.Mesh(bG, breastM);
+      bm.position.set(s * 0.068, 0.40 * tK, 0.08);
+      bm.scale.z = 0.7;
+      body.add(bm);
+    }
+  }
+
   let drape = null, drapeSit = null;
-  if (outerRobe) {
+  if (outerRobe && !dress) { // the cloth-sim robe replaces the rigid lathe drape
     drape = makeOuterRobe(robe, female ? OUTER_ROBE_NUN : OUTER_ROBE);
     drape.scale.y *= tK;
     drapeSit = makeOuterRobe(robe, OUTER_ROBE_SIT);
@@ -378,7 +439,7 @@ export function makePerson(opts = {}) {
 
   // ---------- animation state ----------
   const P = {
-    group: root, body, headG, armL, armR, elbL, elbR, legL, legR, skirt, drape, drapeSit, tK,
+    group: root, body, headG, armL, armR, elbL, elbR, legL, legR, skirt, overSkirt, drape, drapeSit, tK,
     anim: null, phase: Math.random() * 10, speed: 0, // null so the first setAnim('idle') runs in full
     bowT: 0, bowHold: false, haloSprite, height: (standY + (0.82 + 0.28 * chibi) * tK + 0.18) * scale, opts, handsJoined,
     setSadEyes,
@@ -406,6 +467,7 @@ export function makePerson(opts = {}) {
       skirt.visible = false;
       if (overSkirt) overSkirt.visible = false;
       if (drape) { drape.visible = false; drapeSit.visible = true; }
+      if (setFemTorso) setFemTorso(true);
       body.position.y = sitY;
       const base = P._sitBase || (P._sitBase = new THREE.Mesh(G.sitBase, robeM)); // always cloth, never skin
       base.position.y = 0.11;
@@ -429,6 +491,7 @@ export function makePerson(opts = {}) {
       skirt.visible = true;
       if (overSkirt) overSkirt.visible = true;
       if (drape) { drape.visible = true; drapeSit.visible = false; }
+      if (setFemTorso) setFemTorso(false);
       body.position.y = standY;
       if (P._sitBase) P._sitBase.visible = false;
       restArms();
@@ -493,6 +556,10 @@ export function makePerson(opts = {}) {
   };
   P.bow = () => { P.bowT = 1.4; };
   P.setAnim('idle');
+  if (dress) dressCloth(P, {
+    kind, female, monastic, breasts, skinny, outerRobe,
+    robe, outerRobeColour, hairColor, skirtColour: opts.skirtColour,
+  });
   return P;
 }
 
@@ -501,7 +568,7 @@ export function makePerson(opts = {}) {
 // Stands a little taller than the great bodhisattvas.
 export function makeBuddha(opts = {}) {
   const P = makePerson({
-    kind: 'buddha', robe: 0x9a7418, skin: 0xd8b24a,
+    kind: 'buddha', robe: 0x9a7418, skin: 0xd8b24a, outerRobeColour: 0x9a7418,
     hair: 'ushnisha', hairColor: 0x141430, outerRobe: true,
     halo: 'gold', handsJoined: true, scale: 1.25, ...opts,
   });

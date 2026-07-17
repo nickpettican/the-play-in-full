@@ -12,6 +12,7 @@ jsdelivr) and loads `src/main.js`. Everything else is `import`ed from there.
 | `src/world.js` | `World` class (procedural terrain) + one builder per location, `switchWorld(name)` |
 | `src/acts.js` | The 13-act state machine (`ACTS[0..12]` + prelude −1) and stage helpers |
 | `src/characters.js` | Procedural people and animals (see `docs/characters-and-poses.md`) |
+| `src/cloth.js` | Verlet cloth dress (robes, skirts, hair, tops, wraps), auto-attached by `makePerson` (see `docs/cloth-simulation.md`) |
 | `src/player.js` | Third-person controller, camera, witness forms, begging bowl |
 | `src/npc.js` | NPC spawning, wandering, talk menus, Q&A state |
 | `src/dialogue.js` | Speech bubble, typewriter, choices, mindfulness meter, act title cards, fade veil |

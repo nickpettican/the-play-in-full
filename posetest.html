@@ -103,7 +103,9 @@ const orbit = new OrbitControls(camera, renderer.domElement);
 orbit.target.set(0, M.sit ? 0.6 : 1.0, 0);
 orbit.update();
 
-const P = M.who === 'buddha' ? makeBuddha() : makePerson({ kind: M.who, outerRobe: !!M.robe });
+// cloth: false — this page tunes the rigid lathe drape, not the cloth sim
+const P = M.who === 'buddha' ? makeBuddha({ cloth: false })
+  : makePerson({ kind: M.who, outerRobe: !!M.robe, cloth: false });
 P.lockArms = true;
 if (M.sit) P.setAnim('sit');
 // robe modes manage a single rebuilt drape; drop the built-in seated variant

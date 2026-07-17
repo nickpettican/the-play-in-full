@@ -174,6 +174,7 @@ export function scatterGods(W, n = 100, { cx = 0, cz = 0 } = {}) {
     const P = makePerson({
       kind: i % 2 ? 'devi' : 'deva', robe: robes[(Math.random() * 4) | 0],
       ornate: true, scale: 2 + Math.random() * 0.5,
+      cloth: false, // a hundred distant figures: the cloth sim would sink the frame rate
     });
     P.setAnim(Math.random() < 0.35 ? 'idle' : 'sit'); // some stand in the air, the rest are seated
     P.group.traverse(o => {

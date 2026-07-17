@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cloth tester</title>
+<style>
+  body { margin: 0; font: 13px/1.4 monospace; background: #223; color: #eee; }
+  #ui { position: fixed; top: 0; right: 0; width: 280px; max-height: 100vh; overflow-y: auto;
+        background: rgba(10,12,20,0.88); padding: 10px 12px; box-sizing: border-box; }
+  #ui label { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  #ui label span { width: 82px; }
+  #ui input[type=range] { flex: 1; }
+  #ui .v { width: 40px; text-align: right; }
+  #ui h4 { margin: 8px 0 2px; color: #ffd27a; }
+  #ui h5 { margin: 6px 0 2px; color: #cba25f; }
+  #ui button { margin: 2px 2px 2px 0; }
+  #ui details { margin: 4px 0; border-left: 2px solid #453; padding-left: 6px; }
+  #ui summary { color: #ffd27a; cursor: pointer; font-weight: bold; }
+  #out { white-space: pre-wrap; background: #111; padding: 6px; margin-top: 8px;
+         font-size: 11px; user-select: all; }
+  #hint { color: #99a; font-size: 11px; margin-top: 6px; }
+  #fps { color: #8f8; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="ui">
+  <div id="tabs"><button onclick="location.href='charactertest.html'">← characters</button></div>
+  <div>fps: <span id="fps">–</span></div>
+  <h4>actions</h4>
+  <div id="acts"></div>
+  <div id="sliders"></div>
+  <h4>material (all cloths)</h4>
+  <label><span>wireframe</span><input type="checkbox" id="wire"></label>
+  <label><span>roughness</span><input type="range" id="rough" min="0" max="1" step="0.01" value="0.9"><span class="v" id="roughV">0.9</span></label>
+  <label><span>sheen</span><input type="range" id="sheen" min="0" max="1" step="0.01" value="0.6"><span class="v" id="sheenV">0.6</span></label>
+  <label><span>sheen col</span><input type="color" id="sheenCol" value="#ffe2b0"></label>
+  <label><span>sheen rough</span><input type="range" id="sheenR" min="0" max="1" step="0.01" value="0.5"><span class="v" id="sheenRV">0.5</span></label>
+  <div><button id="reset">reset cloth</button><button id="stress">stress ×20</button></div>
+  <div id="out"></div>
+  <div id="hint">Verlet cloth pinned at the top ring. Sitting swaps robe/skirt to a seated
+  shape (tune while seated; idle/walk restores). See docs/cloth-simulation.md.
+  Drag to orbit, wheel to zoom.</div>
+</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { makePerson, makeBuddha, makeNameLabel } from './src/characters.js';
+
+const q = new URLSearchParams(location.search);
+const TAB = ['robe', 'skirt', 'woman', 'man', 'ascetic'].includes(q.get('tab')) ? q.get('tab') : 'robe';
+
+// ---------- cloth kinds ----------
+// shape: top ring lerps to hem ring; angles in units of π (len 2 = closed loop, seam bound)
+// anchors: robe/top hang from the body group, skirt/wrap from the root, hair from the head
+// static: true = rendered rigid at the rest shape, parented to the anchor, no physics
+const DEF = {
+  robe: {
+    shape: { cols: 12, rows: 8, topR: 0.19, botR: 0.3, topY: 0.5, botY: -0.6,
+             start: -0.37, len: 1.77, rotY: 3.13, sx: 1.13, sz: 0.8, y: 0.06, z: 0 },
+    sim: { gravity: 20, damping: 1, wind: 0, stiffness: 6, substeps: 1, maxSpeed: 3, colliderK: 0.6, follow: 1, sway: 0.3 },
+  },
+  skirt: {
+    // fHip/fOvalZ/fTopY shape female skirts only: wider hips (mostly in x), raised
+    // waist; fHipT places the bump peak (fraction of the way down). bulge adds a
+    // rounded mid-profile swell peaking at bulgeT (semi-spherical shapes, any sex).
+    shape: { cols: 16, rows: 8, topR: 0.12, botR: 0.2, topY: 0.82, botY: 0.18,
+             start: 0, len: 2, rotY: 0, sx: 1.15, sz: 1, y: 0, z: 0,
+             bulge: 0.02, bulgeT: 0.18, fHip: 1.4, fHipT: 0.45, fOvalZ: 0, fTopY: 0 },
+    sim: { gravity: 20, damping: 0.995, wind: 0, stiffness: 4, substeps: 1, maxSpeed: 5, colliderK: 0.6, follow: 1, sway: 0.3 },
+  },
+  hair: {
+    // head-local space; wraps the back and sides of the hair cap, open at the face.
+    // thick: an inner shell offset toward the head axis, so the sheet reads as a
+    // volume; the offset tapers to thick2 at the hem so the two layers converge
+    shape: { cols: 12, rows: 8, topR: 0.1, botR: 0.3, topY: 0.18, botY: -0.55,
+             start: 0.35, len: 1.3, rotY: 0, sx: 1.1, sz: 1, y: 0, z: -0.02,
+             thick: 0.03, thick2: 0.012 },
+    sim: { gravity: 20, damping: 0.95, wind: 1, stiffness: 2, substeps: 1, maxSpeed: 3, colliderK: 1, follow: 1, sway: 0.4 },
+  },
+  top: {
+    // strapless tube over the chest, hem above the navel; static — the sim explodes here
+    static: true,
+    shape: { cols: 12, rows: 6, topR: 0.17, botR: 0.14, topY: 0.5, botY: 0.18,
+             start: 0, len: 2, rotY: 0, sx: 1.07, sz: 0.8, y: 0, z: 0 },
+    sim: { gravity: 25, damping: 0.99, wind: 0, stiffness: 2, substeps: 1, maxSpeed: 1, colliderK: 0.48 },
+  },
+  wrap: {
+    // short rendered over-skirt, waist to thigh (like the ascetic's G.wrap)
+    static: true,
+    shape: { cols: 12, rows: 4, topR: 0.12, botR: 0.2, topY: 0.79, botY: 0.6,
+             start: 0, len: 2, rotY: 0, sx: 1, sz: 0.7, y: 0.03, z: 0,
+             bulge: 0.005, bulgeT: 0.5, fHip: 1.17, fHipT: 0.43, fOvalZ: 1, fTopY: 0 },
+    sim: { gravity: 20, damping: 0.99, wind: 0, stiffness: 3, substeps: 1, maxSpeed: 4, colliderK: 0.5 },
+  },
+};
+const MAN_WRAP = { shape: { topR: 0.15, botR: 0.16, topY: 0.78, botY: 0.5, sx: 1.05, sz: 0.7,
+                            y: 0, bulge: 0, bulgeT: 0.5, fHip: 1.3, fHipT: 0.35, fOvalZ: 0.5, fTopY: 0.05 } };
+// the monk/Buddha skirt cut (the base DEF is the woman fit; the nun shares it)
+const MONK_SKIRT = { shape: { topR: 0.12, botR: 0.2, topY: 0.82, botY: 0.18, sx: 1.1, sz: 0.75,
+                              bulge: 0.02, bulgeT: 0.18, fHip: 1.4, fHipT: 0.45, fOvalZ: 0, fTopY: 0 },
+                     sim: { stiffness: 5, sway: 0.15 } };
+const MAN_SKIRT = { shape: { topR: 0.17, botR: 0.28, topY: 0.78, botY: 0.18, sx: 0.98, sz: 0.65,
+                             bulge: 0, bulgeT: 0.5, fHip: 1.3, fHipT: 0.35, fOvalZ: 0.5, fTopY: 0.05 },
+                    sim: { colliderK: 0.5 } };
+const MAN_HAIR = { shape: { cols: 10, botR: 0.2, topY: 0.19, botY: -0.2 },
+                   sim: { damping: 0.99, wind: 0.3, stiffness: 2, maxSpeed: 4, colliderK: 0.5, sway: 0.15 } };
+const TAB_DEF = { // per-tab overrides of the kind defaults (base = the woman-tab values)
+  robe: { top: { shape: { botY: 0 } } }, // the nun's top runs lower than the lay one
+  man: { hair: MAN_HAIR, skirt: MAN_SKIRT, wrap: MAN_WRAP },
+  ascetic: { skirt: { shape: { topR: 0.16, botR: 0.25, topY: 0.8, botY: 0.45, sx: 1.06, sz: 0.68 },
+                      sim: { maxSpeed: 3, colliderK: 0.4 } } },
+};
+for (const [k, o] of Object.entries(TAB_DEF[TAB] ?? {})) {
+  Object.assign(DEF[k].shape, o.shape ?? {});
+  Object.assign(DEF[k].sim, o.sim ?? {});
+}
+
+// ---------- characters per tab: [name, make, {clothKind: spec}] ----------
+// the game auto-dresses via src/cloth.js; this page builds its own cloths to tune.
+// spec is a colour, or { c, shape, sim } pinning per-rig values over the tab DEF
+// (sliders edit the DEF, so pinned keys on a rig stay put — its other keys follow)
+const mk = (o) => makePerson({ ...o, cloth: false });
+const HAIRC = 0x241a10;
+const womanOpts = { hair: 'cap', bareTorso: true, foreArmSkin: true, legsSkin: true, breasts: true };
+const manOpts = { hair: 'capbun', armsSkin: true, legsSkin: true };
+const CHAR_SETS = {
+  robe: [
+    // monk and Buddha pin the monastic cut; the nun wears the live female skirt,
+    // wrap and top (tab DEF, tunable here — her top hem runs lower via TAB_DEF)
+    ['Monk', () => mk({ kind: 'monk', robe: 0x9a4318 }),
+      { robe: 0xcc7722, skirt: { c: 0x9a4318, ...MONK_SKIRT }, wrap: { c: 0x9a4318, ...MAN_WRAP } }],
+    ['Nun', () => mk({ kind: 'nun', robe: 0xb35c2e, breasts: true }),
+      { robe: 0xcc7722, top: 0xcc7722, skirt: 0xb35c2e, wrap: 0xb35c2e }],
+    ['Buddha', () => makeBuddha({ outerRobe: false, cloth: false }),
+      { robe: 0x9a7418, skirt: { c: 0x9a7418, ...MONK_SKIRT }, wrap: { c: 0x9a7418, ...MAN_WRAP } }],
+  ],
+  skirt: [
+    // game-accurate designs: the monk and layman pin the monastic/man cuts, so the
+    // base sliders here shape the laywoman and nun (who share the female fit)
+    ['Monk', () => mk({ kind: 'monk', robe: 0x9a4318 }),
+      { skirt: { c: 0x9a4318, ...MONK_SKIRT }, wrap: { c: 0x9a4318, ...MAN_WRAP } }],
+    ['Nun', () => mk({ kind: 'nun', robe: 0xb35c2e, breasts: true }),
+      { top: { c: 0xb35c2e, shape: { botY: 0 } }, skirt: 0xb35c2e, wrap: 0xb35c2e }],
+    ['Laywoman', () => mk({ kind: 'laywoman', robe: 0x6a4a8a, skin: 0xd8a877, ...womanOpts }),
+      { hair: HAIRC, top: 0x6a4a8a, skirt: 0x523a6b, wrap: 0x523a6b }],
+    ['Layman', () => mk({ kind: 'layman', robe: 0x7a7a5a, skin: 0xc0a070, ...manOpts }),
+      { hair: { c: HAIRC, ...MAN_HAIR }, skirt: { c: 0x7a7a5a, ...MAN_SKIRT }, wrap: { c: 0x7a7a5a, ...MAN_WRAP } }],
+  ],
+  woman: [
+    ['Laywoman', () => mk({ kind: 'laywoman', robe: 0x5f7a62, skin: 0xd8a877, ...womanOpts }),
+      { hair: HAIRC, top: 0x5f7a62, skirt: 0x4a5f8a, wrap: 0x4a5f8a }],
+    ['Gopā', () => mk({ kind: 'laywoman', robe: 0xd84a6a, skin: 0xd8a877, ornate: true, ...womanOpts }),
+      { hair: HAIRC, top: 0xd84a6a, skirt: 0xb03a55, wrap: 0xb03a55 }],
+    ['Devī', () => mk({ kind: 'devi', robe: 0xc9a86a, skin: 0xb08a5c, ornate: true, scale: 2, ...womanOpts }),
+      { hair: HAIRC, top: 0xc9a86a, skirt: 0xc9a86a, wrap: 0xc9a86a }],
+  ],
+  man: [
+    ['Royal', () => mk({ kind: 'layman', robe: 0xb8862c, skin: 0xd8a877, ornate: true,
+      hair: 'capbun', foreArmSkin: true, legsSkin: true }), { hair: HAIRC, skirt: 0xb8862c, wrap: 0xb8862c }],
+    ['Villager', () => mk({ kind: 'layman', robe: 0x7a7a5a, skin: 0xc0a070,
+      hair: 'capbun', armsSkin: true, legsSkin: true }), { hair: HAIRC, skirt: 0x7a7a5a, wrap: 0x7a7a5a }],
+    ['Topless', () => mk({ kind: 'layman', robe: 0x8a6a4a, skin: 0xc0a070,
+      hair: 'capbun', armsSkin: true, bareTorso: true, legsSkin: true }), { hair: HAIRC, skirt: 0x8a6a4a, wrap: 0x8a6a4a }],
+    ['Deva', () => mk({ kind: 'deva', robe: 0xfff6e0, skin: 0xe8c9a0, ornate: true, halo: 'gold',
+      scale: 2, hair: 'capbun', foreArmSkin: true, legsSkin: true }), { hair: HAIRC, skirt: 0xfff6e0, wrap: 0xfff6e0 }],
+  ],
+  ascetic: [
+    ['Siddhārtha (fasting)', () => mk({ kind: 'ascetic', skinny: true, robe: 0x9a8a6a,
+      skin: 0xb08a5c, halo: 'gold' }), { skirt: 0x9a8a6a }],
+    ['Ascetic', () => mk({ kind: 'ascetic', robe: 0x9a8a6a, skin: 0xa87a50 }), { skirt: 0x9a8a6a }],
+  ],
+};
+const SET = CHAR_SETS[TAB];
+const EDIT_KINDS = [...new Set(SET.flatMap(([, , spec]) => Object.keys(spec)))];
+
+// ---------- scene ----------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8fb4c8);
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x557755, 1.1));
+const sun = new THREE.DirectionalLight(0xffe8c0, 1.6);
+sun.position.set(4, 8, 6);
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(25, 32),
+  new THREE.MeshLambertMaterial({ color: 0x6a915a }));
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+
+// shared material properties; each cloth has its own material for its own colour
+const MAT = { roughness: 0.9, sheen: 0.6, sheenColor: '#ffe2b0', sheenRoughness: 0.5, wireframe: false };
+const allMats = [];
+function makeClothMat(color) {
+  const m = new THREE.MeshPhysicalMaterial({
+    color, side: THREE.DoubleSide, roughness: MAT.roughness, sheen: MAT.sheen,
+    sheenColor: new THREE.Color(MAT.sheenColor), sheenRoughness: MAT.sheenRoughness,
+    wireframe: MAT.wireframe,
+  });
+  allMats.push(m);
+  return m;
+}
+
+// ---------- cloth ----------
+const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _f = new THREE.Vector3();
+const FEMALE = ['nun', 'laywoman', 'devi'];
+
+// kāṣāya rice-field patchwork for the outer robe: drawn light so material.color tints it
+function kasayaTexture() {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 256;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff';
+  g.fillRect(0, 0, 512, 256);
+  g.strokeStyle = 'rgba(50,25,0,0.28)';
+  g.lineWidth = 5;
+  const m = 12, cols = 5, w = (512 - 2 * m) / cols, h = 256 - 2 * m;
+  g.strokeRect(m, m, 512 - 2 * m, h);
+  for (let i = 0; i < cols; i++) {
+    const x0 = m + i * w;
+    if (i) { g.beginPath(); g.moveTo(x0, m); g.lineTo(x0, m + h); g.stroke(); }
+    // staggered horizontal seams, alternating per strip like the traditional pattern
+    for (const f of (i % 2 ? [0.33] : [0.22, 0.72])) {
+      const y = m + f * h;
+      g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + w, y); g.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const KASAYA = kasayaTexture();
+
+class ClothRobe {
+  constructor(P, kind, color, ov = {}) {
+    this.P = P; this.kind = kind;
+    // ov: per-rig pinned shape/sim values layered over the live tab DEF
+    this.shape = { ...DEF[kind].shape, ...ov.shape };
+    this.sim = ov.sim ? { ...DEF[kind].sim, ...ov.sim } : DEF[kind].sim;
+    this.static = !!DEF[kind].static;
+    const shape = this.shape;
+    this.anchor = (kind === 'skirt' || kind === 'wrap') ? P.group
+      : kind === 'hair' ? P.headG : P.body;
+    const W = shape.cols, H = shape.rows;
+    this.W = W;
+    const yK = (kind === 'robe' || kind === 'top') ? P.tK : 1;
+    const female = FEMALE.includes(P.opts?.kind);
+    const hips = kind === 'skirt' || kind === 'wrap';
+    const fHip = (hips && female) ? (shape.fHip ?? 1) : 1;
+    const fOvalZ = shape.fOvalZ ?? 1;
+    this.local = [];
+    for (let r = 0; r < H; r++) {
+      const t = r / (H - 1);
+      // bulge: a rounded mid-profile swell peaking at bulgeT (semi-spherical wraps)
+      const rad = THREE.MathUtils.lerp(shape.topR, shape.botR, t) +
+        (shape.bulge ?? 0) * Math.sin(Math.PI * Math.min(t / (2 * (shape.bulgeT ?? 0.5)), 1));
+      // female hips: a bump peaking at fHipT of the way down, wider in x than z (oval)
+      const b = (fHip - 1) * Math.sin(Math.PI * THREE.MathUtils.clamp(t / (2 * (shape.fHipT ?? 0.35)), 0, 1));
+      const radX = rad * (1 + b), radZ = rad * (1 + b * fOvalZ);
+      const y = (THREE.MathUtils.lerp(shape.topY, shape.botY, t) +
+                 (hips && female ? (shape.fTopY ?? 0) : 0)) * yK + shape.y;
+      for (let c = 0; c < W; c++) {
+        const phi = shape.rotY + Math.PI * (shape.start + shape.len * c / (W - 1));
+        this.local.push(new THREE.Vector3(
+          Math.sin(phi) * radX * shape.sx, y, Math.cos(phi) * radZ * shape.sz + shape.z));
+      }
+    }
+    this.p = this.local.map(v => this.anchor.localToWorld(v.clone()));
+    this.prev = this.p.map(v => v.clone());
+    // structural + shear constraints; a closed loop (len≈2) binds the seam columns together
+    this.cons = [];
+    const idx = (r, c) => r * W + c;
+    for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+      if (c + 1 < W) this.addCon(idx(r, c), idx(r, c + 1));
+      if (r + 1 < H) this.addCon(idx(r, c), idx(r + 1, c));
+      if (r + 1 < H && c + 1 < W) { this.addCon(idx(r, c), idx(r + 1, c + 1)); this.addCon(idx(r, c + 1), idx(r + 1, c)); }
+    }
+    if (Math.abs(shape.len - 2) < 0.05) for (let r = 1; r < H; r++) this.addCon(idx(r, 0), idx(r, W - 1));
+    // sphere colliders; leg ones skipped while seated
+    const s = P.group.scale.x, tK = P.tK;
+    this.spheres = [
+      { obj: P.headG, off: new THREE.Vector3(0, 0.09, 0), r: 0.15 * s },
+      { obj: P.body, off: new THREE.Vector3(0, 0.42 * tK, 0), r: 0.17 * s },
+      { obj: P.body, off: new THREE.Vector3(0, 0.20 * tK, 0), r: 0.19 * s },
+      { obj: P.body, off: new THREE.Vector3(0, -0.02, 0), r: 0.20 * s },
+      { obj: P.legL, off: new THREE.Vector3(0, -0.28, 0), r: 0.11 * s, leg: true },
+      { obj: P.legL, off: new THREE.Vector3(0, -0.60, 0), r: 0.10 * s, leg: true },
+      { obj: P.legR, off: new THREE.Vector3(0, -0.28, 0), r: 0.11 * s, leg: true },
+      { obj: P.legR, off: new THREE.Vector3(0, -0.60, 0), r: 0.10 * s, leg: true },
+    ];
+    // sized so that at the default colliderK (~0.55) they still cover the breast meshes
+    if (P.opts?.breasts) this.spheres.push(
+      { obj: P.body, off: new THREE.Vector3(-0.085, 0.40 * tK, 0.09), r: 0.21 * s },
+      { obj: P.body, off: new THREE.Vector3(0.085, 0.40 * tK, 0.09), r: 0.21 * s });
+    this.sw = this.spheres.map(() => new THREE.Vector3()); // per-step world centres
+    this.H = H;
+    this.geo = new THREE.PlaneGeometry(1, 1, W - 1, H - 1); // vertex order matches r*W+c
+    this.mesh = new THREE.Mesh(this.geo, makeClothMat(color));
+    this.mesh.frustumCulled = false;
+    // rice-field patchwork on the monastic outer robe and lower skirt alike
+    if (kind === 'robe' || (kind === 'skirt' && ['monk', 'nun', 'buddha'].includes(P.opts?.kind)))
+      this.mesh.material.map = KASAYA;
+    if (this.static) {
+      // rigid, but moulded once over the colliders (so the top drapes over the breasts),
+      // then baked in local space to ride the anchor's transform
+      const { p } = this;
+      for (let k = 0; k < 4; k++) {
+        for (const [a, b, rest] of this.cons) {
+          _v.subVectors(p[b], p[a]);
+          const d = _v.length() || 1e-6;
+          _v.multiplyScalar((d - rest) / d);
+          const fa = a >= W, fb = b >= W;
+          if (fa && fb) { p[a].addScaledVector(_v, 0.5); p[b].addScaledVector(_v, -0.5); }
+          else if (fa) p[a].add(_v);
+          else if (fb) p[b].sub(_v);
+        }
+        for (const s of this.spheres) {
+          if (s.leg && !s.obj.visible) continue;
+          s.obj.localToWorld(_w.copy(s.off));
+          const r = s.r * this.sim.colliderK;
+          for (let i = W; i < p.length; i++) {
+            _v.subVectors(p[i], _w);
+            const d = _v.length();
+            if (d < r) p[i].copy(_w).addScaledVector(_v, r / (d || 1e-6));
+          }
+        }
+      }
+      const a = this.geo.attributes.position;
+      p.forEach((v, i) => { this.anchor.worldToLocal(v); a.setXYZ(i, v.x, v.y, v.z); });
+      this.geo.computeVertexNormals();
+      this.anchor.add(this.mesh);
+      return;
+    }
+    scene.add(this.mesh);
+    if (shape.thick) {
+      // inner shell pulled toward the anchor axis, one row shorter so its hem edge
+      // hides behind the outer sheet (no visible second layer)
+      this.n2 = W * (H - 1);
+      this.geo2 = new THREE.PlaneGeometry(1, 1, W - 1, H - 2);
+      this.mesh2 = new THREE.Mesh(this.geo2, this.mesh.material);
+      this.mesh2.frustumCulled = false;
+      scene.add(this.mesh2);
+    }
+    this.aPrev = this.anchor.getWorldPosition(new THREE.Vector3());
+    this.write();
+  }
+  addCon(a, b) { this.cons.push([a, b, this.p[a].distanceTo(this.p[b])]); }
+  resetPose() {
+    if (this.static) return;
+    this.local.forEach((l, i) => {
+      this.anchor.localToWorld(this.p[i].copy(l));
+      this.prev[i].copy(this.p[i]);
+    });
+    this.anchor.getWorldPosition(this.aPrev);
+  }
+  dispose() {
+    this.mesh.parent?.remove(this.mesh);
+    this.geo.dispose();
+    if (this.mesh2) { scene.remove(this.mesh2); this.geo2.dispose(); }
+    allMats.splice(allMats.indexOf(this.mesh.material), 1);
+    this.mesh.material.dispose();
+  }
+  step(h, t) {
+    if (this.static) return;
+    const { p, prev, W, sim } = this;
+    // follow: free particles inherit the body's motion beyond what maxSpeed lets them
+    // chase — walking swing is untouched, but a running player can't outpace the robe
+    // and sling it back like a cape. follow scales how much of the excess is inherited.
+    this.anchor.getWorldPosition(_v);
+    if (sim.follow) {
+      _f.subVectors(_v, this.aPrev);
+      const d = _f.length(), free = sim.maxSpeed * h;
+      if (d > free) {
+        _f.multiplyScalar(sim.follow * (d - free) / d);
+        for (let i = W; i < p.length; i++) { p[i].add(_f); prev[i].add(_f); }
+      }
+    }
+    this.aPrev.copy(_v);
+    for (let c = 0; c < W; c++) {      // pin the top ring
+      this.anchor.localToWorld(_v.copy(this.local[c]));
+      p[c].copy(_v); prev[c].copy(_v);
+    }
+    const vmax = sim.maxSpeed * h;
+    for (let i = W; i < p.length; i++) {
+      _v.subVectors(p[i], prev[i]).multiplyScalar(sim.damping);
+      if (_v.lengthSq() > vmax * vmax) _v.setLength(vmax); // clamp: no whip-crack explosions
+      prev[i].copy(p[i]);
+      p[i].add(_v);
+      p[i].y -= sim.gravity * h * h;
+      p[i].z += Math.sin(t * 1.3 + p[i].x * 2) * sim.wind * h * h;
+    }
+    // collider centres once per step; push-out runs INSIDE the solver loop so the
+    // constraints can no longer drag particles back through the body (legs/torso)
+    for (let j = 0; j < this.spheres.length; j++) {
+      const s = this.spheres[j];
+      if (!(s.leg && !s.obj.visible)) s.obj.localToWorld(this.sw[j].copy(s.off));
+    }
+    for (let k = 0; k < sim.stiffness; k++) {
+      for (const [a, b, rest] of this.cons) {
+        _v.subVectors(p[b], p[a]);
+        const d = _v.length() || 1e-6;
+        _v.multiplyScalar((d - rest) / d);
+        const fa = a >= W, fb = b >= W;
+        if (fa && fb) { p[a].addScaledVector(_v, 0.5); p[b].addScaledVector(_v, -0.5); }
+        else if (fa) p[a].add(_v);   // pinned partner: free end takes the whole correction
+        else if (fb) p[b].sub(_v);
+      }
+      for (let j = 0; j < this.spheres.length; j++) {
+        const s = this.spheres[j];
+        if (s.leg && !s.obj.visible) continue;
+        const c = this.sw[j], r = s.r * sim.colliderK;
+        for (let i = W; i < p.length; i++) {
+          _v.subVectors(p[i], c);
+          const d = _v.length();
+          if (d < r) p[i].copy(c).addScaledVector(_v, r / (d || 1e-6));
+        }
+      }
+    }
+    // sway: hard cap on deviation from the rest pose, growing toward the hem — starts,
+    // stops and turns can't fling the cloth about. Bounded movement, not static.
+    if (sim.sway) {
+      for (let i = W; i < p.length; i++) {
+        const lim = sim.sway * ((i / W) | 0) / (this.H - 1);
+        this.anchor.localToWorld(_w.copy(this.local[i]));
+        _v.subVectors(p[i], _w);
+        const d = _v.length();
+        if (d > lim) p[i].copy(_w).addScaledVector(_v, lim / d);
+      }
+    }
+    for (let i = W; i < p.length; i++) if (p[i].y < 0.02) p[i].y = 0.02;
+    this.write();
+  }
+  write() {
+    const a = this.geo.attributes.position;
+    this.p.forEach((v, i) => a.setXYZ(i, v.x, v.y, v.z));
+    a.needsUpdate = true;
+    this.geo.computeVertexNormals();
+    if (this.geo2) {
+      // offset tapers thick → thick2 down the rows, so the two layers converge at
+      // the hem instead of reading as a visibly separate under-sheet
+      const t1 = this.shape.thick, t2 = this.shape.thick2 ?? t1;
+      const b = this.geo2.attributes.position, W = this.W, rowsN = this.H - 2 || 1;
+      this.anchor.getWorldPosition(_w);
+      for (let i = 0; i < this.n2; i++) {
+        const v = this.p[i];
+        const th = t1 + (t2 - t1) * (((i / W) | 0) / rowsN);
+        _v.set(v.x - _w.x, 0, v.z - _w.z);
+        const l = _v.length() || 1e-6;
+        b.setXYZ(i, v.x - _v.x / l * th, v.y, v.z - _v.z / l * th);
+      }
+      b.needsUpdate = true;
+      this.geo2.computeVertexNormals();
+    }
+  }
+}
+
+// ---------- rigs ----------
+const SPACE = 2.6, cx = -0.8;
+const rigs = [];
+let mode = 'idle';
+function addRig(make, spec, x, z, name) {
+  const P = make();
+  P.group.position.set(x, 0, z);
+  scene.add(P.group);
+  if (name) {
+    const label = makeNameLabel(name);
+    label.position.set(x, (P.height ?? 2.2) + 0.4, z);
+    scene.add(label);
+  }
+  const r = { P, spec: { ...spec }, cloths: [], hx: x, hz: z, ang: 0, jy: 0, jv: 0 };
+  rigs.push(r);
+  return r;
+}
+SET.forEach(([name, make, spec], i) =>
+  addRig(make, spec, cx + (i - (SET.length - 1) / 2) * SPACE, 0, name));
+scene.updateMatrixWorld(true);
+const specC = v => (typeof v === 'object' ? v.c : v);
+// pinned rigs drop their pins while seated: everyone shares the SIT_DEF shapes
+const buildCloths = (r) => {
+  r.cloths = Object.entries(r.spec).map(([k, v]) => {
+    const ov = (typeof v === 'object' && !(mode === 'sit' && SIT_DEF[k])) ? v : {};
+    return new ClothRobe(r.P, k, specC(v), ov);
+  });
+};
+rigs.forEach(buildCloths);
+
+// any rig with a cloth skirt loses its rigid under-skirt (and the lay over-layer)
+const hideSkirts = () => {
+  for (const r of rigs) {
+    if (!('skirt' in r.spec)) continue;
+    r.P.skirt.visible = false;
+    if (r.P.overSkirt) r.P.overSkirt.visible = false;
+  }
+};
+
+function rebuild() {
+  scene.updateMatrixWorld(true);
+  for (const r of rigs) { r.cloths.forEach(c => c.dispose()); buildCloths(r); }
+  applySitState();
+  showOut();
+}
+
+// ---------- actions ----------
+// sitting swaps robe/skirt to dedicated seated shape+sim values (like the game's
+// OUTER_ROBE_SIT): short robe hem; the skirt becomes a low pooled cone over the seat
+const SIT_DEF = {
+  robe: {
+    shape: { cols: 12, rows: 8, topR: 0.2, botR: 0.18, topY: 0.5, botY: -0.18,
+             start: -0.37, len: 1.77, rotY: 3.13, sx: 1.13, sz: 0.8, y: 0.06, z: 0 },
+    sim: { gravity: 20, damping: 1, wind: 0, stiffness: 6, substeps: 1, maxSpeed: 3, colliderK: 0.5 },
+  },
+  skirt: {
+    // fHip 1/fOvalZ 0/fTopY 0: seated women lose the hip bump, the pool is symmetric
+    shape: { cols: 16, rows: 8, topR: 0.245, botR: 0.45, topY: 0.25, botY: 0,
+             start: 0, len: 2, rotY: 0, sx: 1, sz: 0.8, y: 0, z: 0.1,
+             fHip: 1, fOvalZ: 0, fTopY: 0 },
+    sim: { gravity: 20, damping: 0.9, wind: 0, stiffness: 3, substeps: 1, maxSpeed: 0.5, colliderK: 0.5 },
+  },
+};
+let preSit = null;
+// monastics/Buddha seated: the skirt cloth and the crossed-legs base take the robe colour
+function applySitState() {
+  const sitting = mode === 'sit';
+  for (const r of rigs) {
+    for (const c of r.cloths) {
+      if (c.kind === 'wrap') c.mesh.visible = !sitting; // short over-skirt: hidden seated
+      if (c.kind === 'skirt' && 'robe' in r.spec)
+        c.mesh.material.color.set(specC(sitting ? r.spec.robe : r.spec.skirt));
+    }
+    // the crossed-legs base takes the robe colour (monastics) or the skirt colour
+    const base = r.P._sitBase;
+    const baseC = 'robe' in r.spec ? r.spec.robe : r.spec.skirt;
+    if (base && baseC !== undefined) {
+      if (!r._origBaseMat) r._origBaseMat = base.material;
+      if (sitting) {
+        r._sitBaseMat ??= new THREE.MeshLambertMaterial({ flatShading: true });
+        r._sitBaseMat.color.set(specC(baseC));
+        base.material = r._sitBaseMat;
+      } else base.material = r._origBaseMat;
+    }
+  }
+}
+const restoreShape = () => {
+  if (!preSit) return;
+  for (const k in preSit) {
+    Object.assign(DEF[k].shape, preSit[k].shape);
+    Object.assign(DEF[k].sim, preSit[k].sim);
+  }
+  preSit = null;
+  syncSliders(); rebuild();
+};
+const acts = document.getElementById('acts');
+const ACTIONS = {
+  idle: () => { mode = 'idle'; rigs.forEach(r => { r.P.setAnim('idle'); r.P.group.rotation.y = 0; }); restoreShape(); applySitState(); },
+  walk: () => { mode = 'walk'; rigs.forEach(r => { r.P.setAnim('walk'); r.P.speed = 1; }); restoreShape(); applySitState(); },
+  sit: () => {
+    mode = 'sit';
+    rigs.forEach(r => { r.P.setAnim('sit'); r.P.group.rotation.y = 0; });
+    if (!preSit) {
+      preSit = {};
+      for (const k of EDIT_KINDS) if (SIT_DEF[k]) {
+        preSit[k] = { shape: { ...DEF[k].shape }, sim: { ...DEF[k].sim } };
+        Object.assign(DEF[k].shape, SIT_DEF[k].shape);
+        Object.assign(DEF[k].sim, SIT_DEF[k].sim);
+      }
+      syncSliders();
+    }
+    rebuild();
+  },
+  jump: () => rigs.forEach(r => { if (r.jy === 0) r.jv = 3.2; }),
+  bow: () => rigs.forEach(r => r.P.bow()),
+};
+for (const name of Object.keys(ACTIONS)) {
+  const b = document.createElement('button');
+  b.textContent = name; b.onclick = ACTIONS[name];
+  acts.appendChild(b);
+}
+
+// ---------- UI ----------
+const tabs = document.getElementById('tabs');
+for (const t of ['robe', 'skirt', 'woman', 'man', 'ascetic']) {
+  const b = document.createElement('button');
+  b.textContent = t; b.disabled = t === TAB;
+  b.onclick = () => location.search = '?tab=' + t;
+  tabs.appendChild(b);
+}
+
+function groupsFor(kind) {
+  const S = DEF[kind].shape, M = DEF[kind].sim;
+  const g = [
+    ['grid', S, true, ['cols', 4, 24, 1], ['rows', 3, 20, 1]],
+    ['top/hem rings', S, true,
+      ['topR', 0.03, 0.5, 0.005], ['botR', 0.03, 0.7, 0.005],
+      ['topY', -0.6, 1, 0.01], ['botY', -1.2, 0.8, 0.01]],
+    ['wrap (×π) + fit', S, true,
+      ['start', -1, 1, 0.01], ['len', 0.2, 2, 0.01], ['rotY', 0, 6.28, 0.01],
+      ['sx', 0.5, 2, 0.01], ['sz', 0.5, 2, 0.01], ['y', -0.5, 0.5, 0.01], ['z', -0.3, 0.3, 0.01]],
+  ];
+  if (kind === 'hair') g[1].push(['thick', 0, 0.08, 0.002], ['thick2', 0, 0.08, 0.002]);
+  if (kind === 'skirt' || kind === 'wrap') {
+    g[1].push(['bulge', -0.2, 0.3, 0.005], ['bulgeT', 0.1, 0.9, 0.01]);
+    g.push(['female hips', S, true,
+      ['fHip', 1, 1.6, 0.01], ['fHipT', 0.1, 0.6, 0.01],
+      ['fOvalZ', 0, 1, 0.01], ['fTopY', 0, 0.2, 0.005]]);
+  }
+  const sim = ['simulation', M, false,
+    ['gravity', 0, 25, 0.1], ['damping', 0.9, 1, 0.001], ['wind', 0, 2, 0.01],
+    ['stiffness', 1, 8, 1], ['substeps', 1, 4, 1], ['maxSpeed', 0.5, 10, 0.1],
+    ['colliderK', 0.3, 1.5, 0.01]];
+  // follow: fraction of body motion the free particles inherit (0 = old cape-like drag)
+  if ('follow' in M) sim.push(['follow', 0, 1, 0.05]);
+  // sway: max deviation from the rest pose at the hem, in metres (0 = unlimited)
+  if ('sway' in M) sim.push(['sway', 0, 0.8, 0.01]);
+  g.push(sim);
+  return g;
+}
+
+const sl = document.getElementById('sliders');
+const inputs = {}; // keyed `${kind}.${param}`
+EDIT_KINDS.forEach((kind, ki) => {
+  const det = document.createElement('details');
+  det.open = ki === 0;
+  const sum = document.createElement('summary');
+  sum.textContent = kind;
+  det.appendChild(sum);
+  // per-kind colour: overrides every cloth of this kind
+  const colLab = document.createElement('label');
+  const colName = document.createElement('span'); colName.textContent = 'colour';
+  const colIn = document.createElement('input');
+  colIn.type = 'color';
+  colIn.value = '#' + new THREE.Color(specC(SET.find(([, , sp]) => kind in sp)[2][kind])).getHexString();
+  colIn.oninput = () => {
+    for (const r of rigs) if (kind in r.spec) {
+      const v = r.spec[kind];
+      if (typeof v === 'object') v.c = colIn.value; else r.spec[kind] = colIn.value;
+      for (const c of r.cloths) if (c.kind === kind) c.mesh.material.color.set(colIn.value);
+    }
+  };
+  colLab.append(colName, colIn);
+  det.appendChild(colLab);
+  // static: rendered rigid at the rest shape, no physics
+  const stLab = document.createElement('label');
+  const stName = document.createElement('span'); stName.textContent = 'static';
+  const stIn = document.createElement('input');
+  stIn.type = 'checkbox'; stIn.checked = !!DEF[kind].static;
+  stIn.onchange = () => { DEF[kind].static = stIn.checked; rebuild(); };
+  stLab.append(stName, stIn);
+  det.appendChild(stLab);
+  for (const [title, obj, rebuilds, ...keys] of groupsFor(kind)) {
+    const h = document.createElement('h5'); h.textContent = title; det.appendChild(h);
+    for (const [k, min, max, step] of keys) {
+      const lab = document.createElement('label');
+      const name = document.createElement('span'); name.textContent = k;
+      const r = document.createElement('input');
+      r.type = 'range'; r.min = min; r.max = max; r.step = step; r.value = obj[k];
+      const v = document.createElement('span'); v.className = 'v'; v.textContent = obj[k];
+      r.oninput = () => {
+        obj[k] = parseFloat(r.value); v.textContent = r.value;
+        // static cloths bake sim values (colliderK) into the shape, so always rebuild
+        if (rebuilds || DEF[kind].static) rebuild(); else showOut();
+      };
+      lab.append(name, r, v);
+      det.appendChild(lab);
+      inputs[kind + '.' + k] = { r, v, obj, k };
+    }
+  }
+  sl.appendChild(det);
+});
+function syncSliders() {
+  for (const key in inputs) {
+    const { r, v, obj, k } = inputs[key];
+    r.value = obj[k]; v.textContent = obj[k];
+  }
+}
+
+const out = document.getElementById('out');
+function showOut() {
+  const f = n => Math.round(n * 1000) / 1000;
+  const fmt = o => JSON.stringify(Object.fromEntries(Object.entries(o).map(([k, x]) => [k, f(x)])));
+  out.textContent = EDIT_KINDS.map(k =>
+    `${k}.shape: ${fmt(DEF[k].shape)}\n${k}.sim: ${fmt(DEF[k].sim)}`).join('\n');
+}
+showOut();
+
+const $ = id => document.getElementById(id);
+$('wire').onchange = e => allMats.forEach(m => m.wireframe = MAT.wireframe = e.target.checked);
+$('rough').oninput = e => { allMats.forEach(m => m.roughness = MAT.roughness = +e.target.value); $('roughV').textContent = e.target.value; };
+$('sheen').oninput = e => { allMats.forEach(m => m.sheen = MAT.sheen = +e.target.value); $('sheenV').textContent = e.target.value; };
+$('sheenCol').oninput = e => { MAT.sheenColor = e.target.value; allMats.forEach(m => m.sheenColor.set(e.target.value)); };
+$('sheenR').oninput = e => { allMats.forEach(m => m.sheenRoughness = MAT.sheenRoughness = +e.target.value); $('sheenRV').textContent = e.target.value; };
+$('reset').onclick = () => { scene.updateMatrixWorld(true); rigs.forEach(r => r.cloths.forEach(c => c.resetPose())); };
+$('stress').onclick = () => {
+  $('stress').disabled = true;
+  scene.updateMatrixWorld(true);
+  const n = 20 - rigs.length;
+  for (let i = 0; i < n; i++) {
+    const [, make, spec] = SET[i % SET.length];
+    const r = addRig(make, spec, -7 + (i % 6) * 2.6, -3 - ((i / 6) | 0) * 2.6);
+    r.P.group.updateWorldMatrix(true, true);
+    buildCloths(r);
+    if (mode !== 'idle') { r.P.setAnim(mode); r.P.speed = 1; }
+  }
+  hideSkirts();
+  applySitState();
+};
+
+// ---------- camera ----------
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(cx, 2.2, 8);
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.target.set(cx, 1, 0);
+orbit.update();
+window.__cam = (yaw, pitch, dist) => {
+  const t = orbit.target;
+  camera.position.set(
+    t.x + Math.sin(yaw) * Math.cos(pitch) * dist,
+    t.y + Math.sin(pitch) * dist,
+    t.z + Math.cos(yaw) * Math.cos(pitch) * dist);
+  orbit.update();
+};
+window.__set = (kind, k, x) => {
+  if (k in DEF[kind].shape) { DEF[kind].shape[k] = x; syncSliders(); rebuild(); }
+  else { DEF[kind].sim[k] = x; syncSliders(); showOut(); }
+};
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---------- loop ----------
+let frames = 0, fpsT = 0;
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.033), t = clock.elapsedTime;
+  frames++; fpsT += dt;
+  if (fpsT >= 0.5) { $('fps').textContent = Math.round(frames / fpsT); frames = 0; fpsT = 0; }
+  for (const r of rigs) {
+    if (r.jv !== 0 || r.jy > 0) {
+      r.jy += r.jv * dt; r.jv -= 9.8 * dt;
+      if (r.jy <= 0) { r.jy = 0; r.jv = 0; }
+    }
+    if (mode === 'walk') {
+      r.ang += dt * 0.9;
+      r.P.group.position.set(r.hx + Math.sin(r.ang), r.jy, r.hz + Math.cos(r.ang));
+      r.P.group.rotation.y = r.ang + Math.PI / 2;
+    } else {
+      r.P.group.position.set(r.hx, r.jy, r.hz);
+    }
+    r.P.update(dt, t);
+  }
+  hideSkirts();
+  scene.updateMatrixWorld(true);
+  for (const r of rigs) for (const c of r.cloths) {
+    const n = Math.max(1, c.sim.substeps | 0), h = dt / n;
+    for (let s = 0; s < n; s++) c.step(h, t);
+  }
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>
